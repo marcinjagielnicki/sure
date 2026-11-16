@@ -9,29 +9,47 @@ class ReceiptScan::Processor
     @scan = scan
   end
 
+  # Safe to run more than once: only a scan still processing is worked on. The AI call runs with
+  # no database transaction open; the results are written under the scan's lock afterwards.
+  # Any unexpected error ends the scan as failed rather than retrying a paid AI call.
   def process!
-    scan.with_lock do
-      return unless scan.processing?
+    scan.reload
+    return unless scan.processing?
 
-      run
+    @placeholder = scan.linked_transaction
+    return record_failure(StandardError.new("The receipt's transaction was deleted")) unless placeholder
+
+    unless Ai.availability(:extract_receipt, family:, user: scan.user).available? && provider
+      return scan.with_lock do
+        next unless scan.processing?
+
+        scan.flag!(:ai_unavailable)
+        write_receipt_extra(placeholder)
+      end
     end
+
+    @extraction = extract
+    return unless extraction
+
+    scan.with_lock do
+      next unless scan.processing? && placeholder_still_there?
+
+      apply_extraction
+    end
+  rescue StandardError => e
+    record_failure(e)
   end
 
   private
-    attr_reader :scan, :extraction, :problems
+    attr_reader :scan, :extraction, :problems, :placeholder
 
     def family = scan.family
 
-    def run
-      @placeholder = scan.linked_transaction
-      unless Ai.availability(:extract_receipt, family:, user: scan.user).available? && provider
-        scan.flag!(:ai_unavailable)
-        return write_receipt_extra(placeholder)
-      end
+    def placeholder_still_there?
+      Transaction.exists?(placeholder.id) or raise StandardError, "The receipt's transaction was deleted"
+    end
 
-      @extraction = extract
-      return unless extraction
-
+    def apply_extraction
       @problems = ReceiptScan::Validator.new(extraction, account: scan.account).problems
       problems.each { |problem| scan.flag!(problem["reason"], **problem.except("reason").symbolize_keys) }
 
@@ -62,8 +80,8 @@ class ReceiptScan::Processor
     end
 
     def record_failure(error)
-      scan.update!(status: :failed, error: error&.message)
-      write_receipt_extra(placeholder)
+      scan.reload.update!(status: :failed, error: error&.message)
+      write_receipt_extra(placeholder) if placeholder && Transaction.exists?(placeholder.id)
       DebugLogEntry.capture(
         category: "ai",
         level: "error",
@@ -117,10 +135,16 @@ class ReceiptScan::Processor
         name: extraction.merchant.presence || I18n.t("receipt_scans.fallback_name"),
         date: extraction.date || entry.date,
         amount: extraction.total || entry.amount,
-        currency: extraction.currency.presence || entry.currency
+        currency: known_currency?(extraction.currency) ? extraction.currency : entry.currency
       )
       entry.lock_saved_attributes!
       entry.sync_account_later
+    end
+
+    def known_currency?(code)
+      code.present? && Money::Currency.new(code).present?
+    rescue Money::Currency::UnknownCurrencyError
+      false
     end
 
     def categorize(entry)
