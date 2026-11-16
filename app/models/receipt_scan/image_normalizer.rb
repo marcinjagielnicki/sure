@@ -4,7 +4,18 @@
 class ReceiptScan::ImageNormalizer
   UnsupportedFile = Class.new(StandardError)
 
-  IMAGE_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif].freeze
+  # libvips picks a loader by sniffing the bytes, whatever the client declared, and some of its
+  # loaders (SVG, PDF, Matlab, ...) are not ones we want running on uploads. Only these may.
+  LOADERS_BY_CONTENT_TYPE = {
+    "image/jpeg" => "jpegload",
+    "image/png" => "pngload",
+    "image/webp" => "webpload",
+    "image/heic" => "heifload",
+    "image/heif" => "heifload"
+  }.freeze
+  IMAGE_CONTENT_TYPES = LOADERS_BY_CONTENT_TYPE.keys.freeze
+  # Larger than any phone camera; guards against decompression bombs.
+  MAX_PIXELS = 50_000_000
   MAX_DIMENSION = 2000
   JPEG_QUALITY = 85
 
@@ -20,7 +31,10 @@ class ReceiptScan::ImageNormalizer
 
   def call
     if content_type == "application/pdf"
-      return { io: StringIO.new(io.read.b), content_type: "application/pdf", filename: }
+      bytes = io.read.b
+      raise UnsupportedFile, "Receipt file is not a PDF" unless bytes.start_with?("%PDF-")
+
+      return { io: StringIO.new(bytes), content_type: "application/pdf", filename: }
     end
     unless content_type.in?(IMAGE_CONTENT_TYPES)
       raise UnsupportedFile, "Unsupported receipt file type: #{content_type.presence || "unknown"}"
@@ -32,10 +46,25 @@ class ReceiptScan::ImageNormalizer
   private
     attr_reader :io, :content_type, :filename
 
+    # Reads only the header: the loader libvips chose and the image size.
+    def verify_image!(path)
+      header = Vips::Image.new_from_file(path, access: :sequential)
+      loader = header.get("vips-loader").to_s
+      unless loader.start_with?(LOADERS_BY_CONTENT_TYPE.fetch(content_type))
+        raise UnsupportedFile, "Receipt file content does not match #{content_type}"
+      end
+      if header.width * header.height > MAX_PIXELS
+        raise UnsupportedFile, "Receipt image is too large (#{header.width}x#{header.height})"
+      end
+    rescue Vips::Error
+      raise UnsupportedFile, "Receipt file is not a readable #{content_type} image"
+    end
+
     def jpeg_bytes
       Tempfile.create([ "receipt", File.extname(filename) ], binmode: true) do |source|
         IO.copy_stream(io, source)
         source.flush
+        verify_image!(source.path)
 
         output = ImageProcessing::Vips
           .source(source.path)
