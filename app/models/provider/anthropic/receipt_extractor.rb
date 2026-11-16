@@ -62,8 +62,9 @@ class Provider::Anthropic::ReceiptExtractor
       @total_bytes ||= Array(files).sum { |file| file[:data].bytesize }
     end
 
+    # Long supermarket receipts with every line item and raw_text need room.
     def max_tokens
-      ENV.fetch("ANTHROPIC_MAX_TOKENS", 4096).to_i
+      8192
     end
 
     def user_content
