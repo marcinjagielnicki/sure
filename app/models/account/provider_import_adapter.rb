@@ -812,6 +812,7 @@ class Account::ProviderImportAdapter
     #    never a copy of the incoming one
     query = account.entries
                    .where(entryable_type: "Transaction")
+                   .where.not(entryable_id: Transaction.where("transactions.extra -> 'receipt' ->> 'status' = 'processing'").select(:id))
                    .where(amount: amount)
                    .where(currency: currency)
                    .where(parent_entry_id: nil)
@@ -872,6 +873,7 @@ class Account::ProviderImportAdapter
       .where(external_id: nil, amount: amount, currency: currency, parent_entry_id: nil)
       .where(date: (date - date_window.days)..(date + date_window.days))
       .where("transactions.extra ? 'receipt'")
+      .where("transactions.extra -> 'receipt' ->> 'status' IS DISTINCT FROM 'processing'")
       .to_a
       .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
   end
