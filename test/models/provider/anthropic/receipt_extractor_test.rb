@@ -53,6 +53,17 @@ class Provider::Anthropic::ReceiptExtractorTest < ActiveSupport::TestCase
     assert_equal [ "Groceries", "Household", nil ], category_schema[:enum]
   end
 
+  test "tells the model to return refunds as a negative total" do
+    captured = nil
+    client = stub_client(build_response(input: receipt_input)) { |params| captured = params }
+
+    extractor(client, files: [ @jpeg ]).extract
+
+    system_text = Array(captured[:system_]).map { _1.is_a?(Hash) ? _1[:text] : _1.to_s }.join
+    assert_match(/ZWROT/, system_text)
+    assert_match(/negative total/i, system_text)
+  end
+
   test "raises on oversize request" do
     huge = { data: "a".b * (Provider::Anthropic::ReceiptExtractor::MAX_FILES_BYTES + 1), content_type: "image/jpeg" }
 
