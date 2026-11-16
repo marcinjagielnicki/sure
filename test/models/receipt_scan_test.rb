@@ -30,6 +30,14 @@ class ReceiptScanTest < ActiveSupport::TestCase
     assert_equal [ { "reason" => "total_mismatch", "expected" => "10.00" } ], scan.review_reasons
   end
 
+  test "destroying the account destroys its receipt scans" do
+    scan = receipt_scans(:processing)
+
+    scan.account.destroy!
+
+    assert_not ReceiptScan.exists?(scan.id)
+  end
+
   test "from_receipt? reads the transaction's extra" do
     transaction = transactions(:one)
     assert_not transaction.from_receipt?
