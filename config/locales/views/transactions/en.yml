@@ -92,6 +92,7 @@ en:
         non_positive_total: The total is zero or negative, for example a refund.
         old_date: The date read from the receipt is more than two years ago.
         possible_duplicates: Several bank transactions could be this payment. Delete the one you don't need.
+        split_after_booking: The bank hasn't booked this payment yet. Split it by category once it's booked.
         too_many_attachments: The matching bank transaction already has too many attachments.
         unknown_currency: The currency could not be read.
         vat_total_mismatch: The VAT summary doesn't add up to the total.

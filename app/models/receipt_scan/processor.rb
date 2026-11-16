@@ -153,6 +153,9 @@ class ReceiptScan::Processor
       groups = ReceiptScan::CategoryAllocator.new(extraction, categories: family.categories).groups
       if groups.one?
         entry.entryable.update!(category: groups.first[:category]) if groups.first[:category]
+      elsif groups.many? && entry.entryable.pending?
+        # A pending transaction can't be split; the user splits it once the bank books it.
+        scan.flag!(:split_after_booking)
       elsif groups.many?
         entry.split_once!(groups.map { |group| split_for(group) }, lock_attributes: true)
       end

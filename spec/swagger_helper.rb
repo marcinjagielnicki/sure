@@ -1119,7 +1119,7 @@ RSpec.configure do |config|
                 type: :string,
                 enum: %w[ai_unavailable missing_total non_positive_total missing_date future_date old_date invalid_nip
                          items_total_mismatch vat_total_mismatch currency_mismatch unknown_currency possible_duplicates
-                         duplicate_receipt too_many_attachments]
+                         duplicate_receipt too_many_attachments split_after_booking]
               }
             },
             additionalProperties: true

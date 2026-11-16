@@ -1,5 +1,6 @@
 # Looks for the bank's version of a receipt's payment on the account the user picked, for the
-# case where bank data arrived before the photo. Name is deliberately ignored: receipt merchant
+# case where bank data arrived before the photo. A pending bank entry counts: the provider later
+# books that same entry, so attaching the receipt to it avoids a second expense. Name is deliberately ignored: receipt merchant
 # names and bank descriptions rarely agree.
 class ReceiptScan::Matcher
   Result = Data.define(:kind, :entries)
@@ -73,7 +74,6 @@ class ReceiptScan::Matcher
         .where(date: (extraction.date - window)..(extraction.date + window))
         .where.not("transactions.extra ? 'receipt'")
         .where.not(id: Entry.where.not(parent_entry_id: nil).select(:parent_entry_id))
-        .where.not(Transaction.pending_sql)
         .order(:date, :created_at)
     end
 end
