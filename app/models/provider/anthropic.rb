@@ -247,6 +247,38 @@ class Provider::Anthropic < Provider
     end
   end
 
+  def supports_receipt_extraction?(model: @default_model)
+    supports_pdf_processing?(model: model.presence || @default_model)
+  end
+
+  def extract_receipt(files:, category_names:, model: "", family: nil)
+    with_provider_response do
+      effective_model = model.presence || @default_model
+      raise Error, "Model does not support receipt extraction: #{effective_model}" unless supports_receipt_extraction?(model: effective_model)
+
+      trace = create_langfuse_trace(
+        name: "anthropic.extract_receipt",
+        input: { files: files.size, bytes: files.sum { |file| file[:data].bytesize } }
+      )
+
+      result = ReceiptExtractor.new(
+        client,
+        model: effective_model,
+        files: files,
+        category_names: category_names,
+        langfuse_trace: trace,
+        family: family
+      ).extract
+
+      finish_langfuse_trace(trace: trace, output: result.to_h)
+
+      result
+    rescue => error
+      finish_langfuse_trace(trace: trace, output: { error: error.message }, level: "ERROR")
+      raise
+    end
+  end
+
   def extract_bank_statement(pdf_content:, model: "", family: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
