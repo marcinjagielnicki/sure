@@ -147,6 +147,8 @@ class Provider::Anthropic::ReceiptExtractor
             Never use "RESZTA" (change), "GOTÓWKA" (cash tendered) or "KARTA" lines as the total.
           - vat_breakdown comes from the "PTU A 23%" style lines; read each letter's rate from the
             receipt rather than assuming one.
+          - A refund or return ("ZWROT", "Paragon zwrotu", "Faktura korygująca" lowering the amount)
+            is money coming back: give it a negative total, and negative line item amounts.
           - A printout marked "NIEFISKALNY" is not a fiscal receipt: document_kind "other".
           - Invoices ("Faktura", "Rachunek") and utility bills are document_kind "invoice";
             give the issue date as date and the payment deadline ("termin płatności") as due_date.
