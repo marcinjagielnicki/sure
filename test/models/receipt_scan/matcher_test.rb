@@ -75,6 +75,24 @@ class ReceiptScan::MatcherTest < ActiveSupport::TestCase
     assert_equal [ earlier ], result.entries
   end
 
+  test "flags a re-upload of a receipt already merged into a later bank entry" do
+    merged = add_entry(date: @date + 2.days, extra: { "receipt" => { "status" => "completed", "date" => @date.iso8601 } })
+
+    result = match
+
+    assert_equal :duplicate_receipt, result.kind
+    assert_equal [ merged ], result.entries
+  end
+
+  test "flags a cash receipt uploaded twice" do
+    earlier = add_entry(date: @date, extra: { "receipt" => { "status" => "completed", "date" => @date.iso8601 } })
+
+    result = match(payment_method: "cash")
+
+    assert_equal :duplicate_receipt, result.kind
+    assert_equal [ earlier ], result.entries
+  end
+
   private
     def match(**overrides)
       extraction = build_receipt_extraction(**{ total: @total, date: @date, line_items: [] }.merge(overrides))
