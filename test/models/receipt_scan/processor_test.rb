@@ -153,6 +153,55 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert scan.reload.completed?
   end
 
+  test "calls the AI provider outside a database transaction" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    baseline = ActiveRecord::Base.connection.open_transactions
+    open_during_call = nil
+    provider = stub(supports_receipt_extraction?: true)
+    provider.stubs(:extract_receipt).with do |**|
+      open_during_call = ActiveRecord::Base.connection.open_transactions
+      true
+    end.returns(Provider::Response.new(success?: true, data: build_receipt_extraction(date: @date), error: nil))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    process(scan)
+
+    assert_equal baseline, open_during_call
+  end
+
+  test "a placeholder deleted before processing ends the scan as failed" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction
+    scan.linked_transaction.entry.destroy!
+
+    assert_nothing_raised { process(scan.reload) }
+
+    assert scan.reload.failed?
+  end
+
+  test "an error after extraction marks the scan failed instead of raising" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    ReceiptScan::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
+
+    assert_difference -> { DebugLogEntry.count }, 1 do
+      assert_nothing_raised { process(scan) }
+    end
+
+    assert scan.reload.failed?
+    assert_equal "boom", scan.error
+  end
+
+  test "an unreadable currency keeps the account currency" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(currency: "ZL")
+
+    process(scan)
+
+    assert_equal "USD", scan.reload.linked_transaction.entry.currency
+    assert_includes scan.review_reasons.map { _1["reason"] }, "unknown_currency"
+  end
+
   private
     def uploaded(name, content_type)
       Rack::Test::UploadedFile.new(file_fixture("receipts/#{name}"), content_type)
