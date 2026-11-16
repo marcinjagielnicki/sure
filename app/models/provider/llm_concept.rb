@@ -46,6 +46,19 @@ module Provider::LlmConcept
     raise NotImplementedError, "Provider does not support PDF processing"
   end
 
+  ReceiptExtraction = Data.define(
+    :document_kind, :merchant, :nip, :date, :due_date, :total, :currency, :payment_method,
+    :vat_breakdown, :line_items, :confidence, :raw_text
+  )
+
+  def supports_receipt_extraction?(model: nil)
+    false
+  end
+
+  def extract_receipt(files:, category_names:, model: "", family: nil)
+    raise NotImplementedError, "Provider does not support receipt extraction"
+  end
+
   ChatMessage = Data.define(:id, :output_text)
   ChatStreamChunk = Data.define(:type, :data, :usage)
   ChatResponse = Data.define(:id, :model, :messages, :function_requests)
