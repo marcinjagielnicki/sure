@@ -43,10 +43,13 @@ class ReceiptScan::MatcherTest < ActiveSupport::TestCase
     assert_equal :none, match.kind
   end
 
-  test "ignores pending bank entry" do
-    add_entry(date: @date, extra: { "plaid" => { "pending" => true } })
+  test "matches a pending bank entry" do
+    pending = add_entry(date: @date, extra: { "plaid" => { "pending" => true } })
 
-    assert_equal :none, match.kind
+    result = match
+
+    assert_equal :single, result.kind
+    assert_equal [ pending ], result.entries
   end
 
   test "ignores split parents and their children" do

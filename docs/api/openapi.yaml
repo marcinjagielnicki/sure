@@ -2057,6 +2057,7 @@ components:
           - possible_duplicates
           - duplicate_receipt
           - too_many_attachments
+          - split_after_booking
       additionalProperties: true
     ReceiptScan:
       type: object

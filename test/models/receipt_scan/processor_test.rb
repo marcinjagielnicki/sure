@@ -89,6 +89,21 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_equal @food, bank.entryable.category
   end
 
+  test "merges into a pending bank transaction and defers the split" do
+    pending = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
+                            amount: BigDecimal("50.00"), entryable: Transaction.new(extra: { "plaid" => { "pending" => true } }))
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "30.00", "Food & Drink"), item("Soap", "20.00", "Household") ])
+
+    assert_difference -> { Entry.count }, -1 do
+      process(scan)
+    end
+
+    assert_equal pending.entryable, scan.reload.linked_transaction
+    assert_not pending.reload.split_parent?
+    assert_includes scan.review_reasons.map { _1["reason"] }, "split_after_booking"
+  end
+
   test "ambiguous flags with entry ids" do
     ids = Array.new(2) do |i|
       Entry.create!(account: @account, name: "CARD", date: @date + i.days, currency: "USD",
