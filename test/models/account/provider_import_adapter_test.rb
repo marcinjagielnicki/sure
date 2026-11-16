@@ -1515,6 +1515,80 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "a posted transaction claims a receipt entry a few days earlier" do
+    receipt = create_receipt_entry(date: Date.current - 2.days, amount: 61.37)
+
+    assert_no_difference "@account.entries.count" do
+      entry = @adapter.import_transaction(
+        external_id: "simplefin_receipt_posted", amount: 61.37, currency: "USD",
+        date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+      )
+
+      assert_equal receipt.id, entry.id
+      assert_equal "simplefin_receipt_posted", entry.external_id
+      assert_equal "Corner Grocer", entry.name
+      assert entry.transaction.from_receipt?
+    end
+  end
+
+  test "a statement import row finds a receipt entry within its window" do
+    receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
+
+    found = @adapter.find_duplicate_transaction(
+      date: Date.current, amount: 61.37, currency: "USD",
+      date_window: PdfImport::RECONCILIATION_DATE_WINDOW, include_provider_entries: true
+    )
+
+    assert_equal receipt, found
+  end
+
+  test "a receipt entry outside the window is not claimed" do
+    create_receipt_entry(date: Date.current - 4.days, amount: 61.37)
+
+    assert_difference "@account.entries.count", 1 do
+      @adapter.import_transaction(
+        external_id: "simplefin_receipt_far", amount: 61.37, currency: "USD",
+        date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+      )
+    end
+  end
+
+  test "a manual entry that is not a receipt still needs the exact date" do
+    @account.entries.create!(date: Date.current - 2.days, amount: 61.37, currency: "USD", name: "Manual", entryable: Transaction.new)
+
+    assert_difference "@account.entries.count", 1 do
+      @adapter.import_transaction(
+        external_id: "simplefin_manual_far", amount: 61.37, currency: "USD",
+        date: Date.current, name: "CARD", source: "simplefin"
+      )
+    end
+  end
+
+  test "a split receipt claimed while pending reconciles with its booked version" do
+    receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
+    receipt.split!([ { name: "Food", amount: 41.37, category_id: nil }, { name: "Home", amount: 20, category_id: nil } ])
+
+    pending = @adapter.import_transaction(
+      external_id: "simplefin_receipt_pending", amount: 61.37, currency: "USD",
+      date: Date.current - 2.days, name: "CARD CORNER GROCER", source: "simplefin",
+      extra: { "simplefin" => { "pending" => true } }
+    )
+    assert_equal receipt.id, pending.id
+
+    assert_no_difference "@account.entries.count" do
+      posted = @adapter.import_transaction(
+        external_id: "simplefin_receipt_booked", amount: 61.37, currency: "USD",
+        date: Date.current, name: "CARD CORNER GROCER", source: "simplefin",
+        extra: { "simplefin" => { "pending" => false } }
+      )
+
+      assert_equal receipt.id, posted.id
+      assert_not posted.transaction.pending?
+      assert_equal 2, posted.child_entries.count
+      assert posted.excluded?
+    end
+  end
+
   # ============================================================================
   # Pending→Posted Transaction Reconciliation Tests
   # ============================================================================
@@ -2591,6 +2665,15 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
 
     # Locked and user-modified, the way TransactionsController#create leaves a
     # transaction the user typed in.
+    def create_receipt_entry(date:, amount:)
+      entry = @account.entries.create!(
+        date: date, amount: amount, currency: "USD", name: "Corner Grocer",
+        entryable: Transaction.new(extra: { "receipt" => { "status" => "completed" } })
+      )
+      entry.lock_saved_attributes!
+      entry
+    end
+
     def create_user_entered_transaction(date:, amount:, name:)
       entry = @account.entries.create!(date: date, amount: amount, currency: "USD", name: name, entryable: Transaction.new)
       entry.lock_saved_attributes!
