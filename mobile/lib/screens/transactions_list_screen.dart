@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/account.dart';
@@ -12,6 +14,7 @@ import '../screens/transaction_edit_screen.dart';
 import '../screens/transaction_form_screen.dart';
 import '../widgets/account_detail_header.dart';
 import '../widgets/category_filter.dart';
+import '../widgets/receipt_status_chip.dart';
 import '../widgets/sync_status_badge.dart';
 import '../services/log_service.dart';
 import '../theme/sure_tokens.dart';
@@ -37,12 +40,45 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
   bool _isSelectionMode = false;
   final Set<String> _selectedTransactions = {};
   Set<String> _selectedCategoryIds = {};
+  Timer? _receiptPoll;
+  DateTime? _receiptPollStarted;
+
+  static const _receiptPollInterval = Duration(seconds: 5);
+  static const _receiptPollLimit = Duration(minutes: 2);
 
   @override
   void initState() {
     super.initState();
     _loadTransactions();
     _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _receiptPoll?.cancel();
+    super.dispose();
+  }
+
+  // Receipts are read on the server after upload; refresh until none of the
+  // listed transactions is still processing, for at most two minutes.
+  void _scheduleReceiptPoll() {
+    final processing = context
+        .read<TransactionsProvider>()
+        .transactions
+        .any((transaction) => transaction.receiptProcessing);
+    if (!processing) {
+      _receiptPoll?.cancel();
+      _receiptPollStarted = null;
+      return;
+    }
+
+    _receiptPollStarted ??= DateTime.now();
+    if (DateTime.now().difference(_receiptPollStarted!) > _receiptPollLimit) return;
+
+    _receiptPoll?.cancel();
+    _receiptPoll = Timer(_receiptPollInterval, () {
+      if (mounted) _loadTransactions();
+    });
   }
 
   // Parse and display amount information
@@ -134,6 +170,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
       accessToken: accessToken,
       accountId: widget.account.id,
     );
+    if (mounted) _scheduleReceiptPoll();
   }
 
   void _toggleSelectionMode() {
@@ -672,6 +709,10 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
                                           color: colorScheme.onSurfaceVariant,
                                         ),
                                   ),
+                                  if (transaction.receiptProcessing || transaction.receiptNeedsReview) ...[
+                                    const SizedBox(height: 4),
+                                    ReceiptStatusChip(transaction: transaction),
+                                  ],
                                   if (transaction.merchantName != null ||
                                       transaction.tagNames.isNotEmpty) ...[
                                     const SizedBox(height: 4),

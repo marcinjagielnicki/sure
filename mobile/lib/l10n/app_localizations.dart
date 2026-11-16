@@ -2341,6 +2341,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Transaction'**
   String get addTransactionOption;
+
+  /// Badge on a transaction whose receipt is still being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing receipt…'**
+  String get receiptProcessing;
+
+  /// Badge on a transaction whose receipt needs the user to check it.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs review'**
+  String get receiptNeedsReview;
+
+  /// Heading of the receipt section on the transaction screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get receiptSectionTitle;
 }
 
 class _AppLocalizationsDelegate

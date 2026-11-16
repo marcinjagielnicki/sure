@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/receipt_details_section.dart';
 import 'package:provider/provider.dart';
 import '../models/category.dart' as models;
 import '../models/merchant.dart';
@@ -329,6 +330,10 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (widget.transaction.receipt != null) ...[
+              ReceiptDetailsSection(receipt: widget.transaction.receipt),
+              const SizedBox(height: 16),
+            ],
             if (!canEdit) ...[
               Card(
                 color: colorScheme.errorContainer,
