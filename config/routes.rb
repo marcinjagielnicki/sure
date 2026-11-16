@@ -852,6 +852,7 @@ Rails.application.routes.draw do
 
       resources :transactions, only: [ :index, :show, :create, :update, :destroy ] do
         resource :split, only: [ :show, :create, :update, :destroy ]
+        resources :attachments, only: [ :show ], controller: :transaction_attachments
       end
       resources :trades, only: [ :index, :show, :create, :update, :destroy ]
       resources :holdings, only: [ :index, :show ]

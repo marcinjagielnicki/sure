@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_config.dart';
 import '../widgets/receipt_details_section.dart';
 import 'package:provider/provider.dart';
 import '../models/category.dart' as models;
@@ -28,6 +29,8 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _notesController;
+  late final Future<String?> _receiptImageToken =
+      Provider.of<AuthProvider>(context, listen: false).getValidAccessToken();
   String? _selectedCategoryId;
   String? _selectedMerchantId;
   late Set<String> _selectedTagIds;
@@ -331,7 +334,13 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (widget.transaction.receipt != null) ...[
-              ReceiptDetailsSection(receipt: widget.transaction.receipt),
+              FutureBuilder<String?>(
+                future: _receiptImageToken,
+                builder: (context, snapshot) => ReceiptDetailsSection(
+                  receipt: widget.transaction.receipt,
+                  imageHeaders: snapshot.data == null ? null : ApiConfig.getAuthHeaders(snapshot.data!),
+                ),
+              ),
               const SizedBox(height: 16),
             ],
             if (!canEdit) ...[

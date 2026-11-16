@@ -8,7 +8,10 @@ import '../models/transaction.dart';
 class ReceiptDetailsSection extends StatelessWidget {
   final TransactionReceipt? receipt;
 
-  const ReceiptDetailsSection({super.key, required this.receipt});
+  /// API credentials for loading the photos; the attachment URLs are API routes.
+  final Map<String, String>? imageHeaders;
+
+  const ReceiptDetailsSection({super.key, required this.receipt, this.imageHeaders});
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +56,7 @@ class ReceiptDetailsSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
                       images[index].thumbnailUrl ?? images[index].url,
+                      headers: imageHeaders,
                       width: 90,
                       height: 120,
                       fit: BoxFit.cover,

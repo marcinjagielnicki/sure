@@ -139,6 +139,7 @@ json.attachments transaction.attachments do |attachment|
   json.id attachment.id
   json.filename attachment.filename.to_s
   json.content_type attachment.content_type
-  json.url rails_blob_url(attachment)
-  json.thumbnail_url(attachment.variable? ? rails_representation_url(attachment.variant(:thumbnail)) : nil)
+  # Served by Api::V1::TransactionAttachmentsController with the caller's API credentials.
+  json.url api_v1_transaction_attachment_url(transaction, attachment)
+  json.thumbnail_url(attachment.variable? ? api_v1_transaction_attachment_url(transaction, attachment, variant: "thumbnail") : nil)
 end
