@@ -13,6 +13,8 @@ module Ai::Routes
                          sends: %i[transaction_dates transaction_amounts transaction_names category_names bill_configuration] },
     extract_pdf:       { lane: :prompt,      needs: %i[structured_output],      consent: :user,   # vision, documents, ocr: per way of reading
                          sends: %i[uploaded_document] },
+    extract_receipt:   { lane: :background,  needs: %i[structured_output],      consent: :user,
+                         sends: %i[receipt_images category_names] },
     embed:             { lane: :prompt,      needs: %i[embedding],              consent: :user,
                          sends: %i[depends_on_vector_store] },
     search_documents:  { lane: :interactive, route_of: :embed, consent_as: :embed, consent: :user,
