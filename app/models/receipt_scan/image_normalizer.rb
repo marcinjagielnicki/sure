@@ -14,6 +14,8 @@ class ReceiptScan::ImageNormalizer
     "image/heif" => "heifload"
   }.freeze
   IMAGE_CONTENT_TYPES = LOADERS_BY_CONTENT_TYPE.keys.freeze
+  # Types that say nothing about the file: mobile image pickers upload photos without one.
+  GENERIC_CONTENT_TYPES = [ "", "application/octet-stream", "binary/octet-stream" ].freeze
   # Larger than any phone camera; guards against decompression bombs.
   MAX_PIXELS = 50_000_000
   MAX_DIMENSION = 2000
@@ -25,8 +27,8 @@ class ReceiptScan::ImageNormalizer
 
   def initialize(io:, content_type:, filename:)
     @io = io
-    @content_type = content_type.to_s.downcase
     @filename = filename.to_s
+    @content_type = resolve_content_type(content_type.to_s.downcase)
   end
 
   def call
@@ -45,6 +47,15 @@ class ReceiptScan::ImageNormalizer
 
   private
     attr_reader :io, :content_type, :filename
+
+    # The libvips loader check below still decides whether the bytes are acceptable.
+    def resolve_content_type(declared)
+      return declared unless declared.in?(GENERIC_CONTENT_TYPES)
+
+      sniffed = Marcel::MimeType.for(io, name: filename)
+      io.rewind if io.respond_to?(:rewind)
+      sniffed.to_s.downcase
+    end
 
     # Reads only the header: the loader libvips chose and the image size.
     def verify_image!(path)

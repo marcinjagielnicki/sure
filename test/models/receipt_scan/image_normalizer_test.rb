@@ -26,6 +26,20 @@ class ReceiptScan::ImageNormalizerTest < ActiveSupport::TestCase
     assert_equal original, result[:io].read.b
   end
 
+  test "sniffs a photo uploaded without a usable content type" do
+    %w[application/octet-stream].push("").each do |declared|
+      result = normalize("rotated.jpg", declared)
+
+      assert_upright_stripped_jpeg(result)
+    end
+  end
+
+  test "sniffs a pdf uploaded as octet-stream" do
+    result = normalize("receipt.pdf", "application/octet-stream")
+
+    assert_equal "application/pdf", result[:content_type]
+  end
+
   test "rejects text file" do
     assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
       ReceiptScan::ImageNormalizer.call(io: StringIO.new("hello"), content_type: "text/plain", filename: "a.txt")

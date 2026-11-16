@@ -48,6 +48,24 @@ void main() {
       expect(scan.transactionId, 'tx_1');
     });
 
+    test('sends picker photos without a mime type as image/jpeg', () async {
+      late http.Request sent;
+      final service = ReceiptsService(
+        client: MockClient((request) async {
+          sent = request;
+          return http.Response(jsonEncode({'id': 's', 'status': 'processing', 'account_id': 'a'}), 202);
+        }),
+      );
+
+      await service.upload(
+        accessToken: 'token',
+        accountId: 'a',
+        files: [XFile.fromData(Uint8List.fromList([0xFF, 0xD8]), path: '/tmp/image_picker_123.jpg')],
+      );
+
+      expect(utf8.decode(sent.bodyBytes, allowMalformed: true), contains('content-type: image/jpeg'));
+    });
+
     test('names a photo without a file name', () async {
       late http.Request sent;
       final service = ReceiptsService(
