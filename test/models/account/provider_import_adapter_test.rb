@@ -1860,6 +1860,22 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_equal receipt, found
   end
 
+  test "a zero amount transaction does not claim a receipt still being processed" do
+    placeholder = @account.entries.create!(
+      date: Date.current, amount: 0, currency: "USD", name: "Processing receipt…",
+      entryable: Transaction.new(extra: { "receipt" => { "status" => "processing" } })
+    )
+
+    assert_difference "@account.entries.count", 1 do
+      @adapter.import_transaction(
+        external_id: "plaid_card_check", amount: 0, currency: "USD",
+        date: Date.current, name: "CARD VERIFICATION", source: "plaid"
+      )
+    end
+
+    assert_nil placeholder.reload.external_id
+  end
+
   test "a receipt entry outside the window is not claimed" do
     create_receipt_entry(date: Date.current - 4.days, amount: 61.37)
 
