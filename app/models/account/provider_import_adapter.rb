@@ -122,7 +122,8 @@ class Account::ProviderImportAdapter
       # before linking their account to a provider
       # Note: We don't pass name here to allow matching even when provider formats names differently
       if entry.new_record? && allow_heuristic_matching
-        scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency)
+        scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency) ||
+          find_receipt_transaction(date: date, amount: amount, currency: currency)
         duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency) unless scheduled
 
         if scheduled
@@ -890,6 +891,22 @@ class Account::ProviderImportAdapter
       .where(entryable_type: "Transaction", external_id: nil, amount: amount, currency: currency)
       .where(date: (date - date_window.days)..(date + date_window.days))
       .where("entries.created_at < entries.date")
+      .to_a
+      .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
+  end
+
+  # A transaction created from a receipt photo, usually before the bank reports the payment. It
+  # is claimed the way an ahead-of-time transaction is: card payments book a few days after the
+  # receipt date, and the claim must go through even when the receipt was split (which protects
+  # the entry) so a pending claim can still reconcile with its booked version.
+  def find_receipt_transaction(date:, amount:, currency:, date_window: ReceiptScan::MATCH_DATE_WINDOW)
+    date = Date.parse(date.to_s) unless date.is_a?(Date)
+
+    account.entries
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where(external_id: nil, amount: amount, currency: currency, parent_entry_id: nil)
+      .where(date: (date - date_window.days)..(date + date_window.days))
+      .where("transactions.extra ? 'receipt'")
       .to_a
       .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
   end
