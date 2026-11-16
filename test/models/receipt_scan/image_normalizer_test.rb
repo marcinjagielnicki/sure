@@ -32,6 +32,36 @@ class ReceiptScan::ImageNormalizerTest < ActiveSupport::TestCase
     end
   end
 
+  test "rejects a file whose bytes are not the declared image type" do
+    File.open(file_fixture("receipts/receipt.pdf"), "rb") do |io|
+      assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
+        ReceiptScan::ImageNormalizer.call(io:, content_type: "image/jpeg", filename: "fake.jpg")
+      end
+    end
+  end
+
+  test "rejects a pdf without a pdf signature" do
+    assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
+      ReceiptScan::ImageNormalizer.call(io: StringIO.new("<html>"), content_type: "application/pdf", filename: "x.pdf")
+    end
+  end
+
+  test "rejects an svg declared as png" do
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'
+
+    assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
+      ReceiptScan::ImageNormalizer.call(io: StringIO.new(svg), content_type: "image/png", filename: "x.png")
+    end
+  end
+
+  test "rejects images over the pixel limit" do
+    png = Vips::Image.black(9000, 6000).pngsave_buffer(compression: 9)
+
+    assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
+      ReceiptScan::ImageNormalizer.call(io: StringIO.new(png), content_type: "image/png", filename: "bomb.png")
+    end
+  end
+
   private
     def normalize(name, content_type)
       File.open(file_fixture("receipts/#{name}"), "rb") do |io|
