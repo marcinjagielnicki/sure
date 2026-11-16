@@ -14,10 +14,9 @@ class ReceiptScan::Matcher
   # kind is :skip (this receipt is never matched), :none, :single, :ambiguous or
   # :duplicate_receipt (another receipt on the account already records this payment)
   def result
-    return Result.new(kind: :skip, entries: []) if skip?
-
-    earlier_receipt = same_payment.where(date: extraction.date).merge(receipt_entries).first
+    earlier_receipt = earlier_receipt_entry
     return Result.new(kind: :duplicate_receipt, entries: [ earlier_receipt ]) if earlier_receipt
+    return Result.new(kind: :skip, entries: []) if skip?
 
     candidates = bank_candidates.to_a
     kind = case candidates.size
@@ -47,8 +46,24 @@ class ReceiptScan::Matcher
       placeholder_entry_id ? scope.where.not(id: placeholder_entry_id) : scope
     end
 
-    def receipt_entries
-      Entry.where("transactions.extra ? 'receipt'")
+    # Another receipt on this account for the same amount and receipt date. Compared on the date
+    # read from that receipt, since a receipt merged into or claimed by a bank entry carries the
+    # bank's posting date.
+    RECEIPT_DATE_SQL = <<~SQL.squish.freeze
+      CASE WHEN transactions.extra -> 'receipt' ->> 'date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
+        THEN (transactions.extra -> 'receipt' ->> 'date')::date
+        ELSE entries.date
+      END
+    SQL
+
+    def earlier_receipt_entry
+      return if extraction.total.nil? || extraction.date.nil? || extraction.currency.blank?
+
+      same_payment
+        .where("transactions.extra ? 'receipt'")
+        .where("#{RECEIPT_DATE_SQL} = ?", extraction.date)
+        .order(:created_at)
+        .first
     end
 
     def bank_candidates
