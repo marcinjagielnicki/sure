@@ -15,6 +15,8 @@ class Transaction < ApplicationRecord
     attachable.variant :thumbnail, resize_to_limit: [ 150, 150 ]
   end
 
+  has_one :receipt_scan, foreign_key: :transaction_id, dependent: :nullify, inverse_of: :linked_transaction
+
   # Attachment validation constants
   MAX_ATTACHMENTS_PER_TRANSACTION = 10
   MAX_ATTACHMENT_SIZE = 10.megabytes
@@ -441,6 +443,10 @@ class Transaction < ApplicationRecord
   # pick. See Category.recently_used_for.
   def record_category_usage!
     category.touch(:last_used_at) if saved_change_to_category_id? && category.present?
+  end
+
+  def from_receipt?
+    extra.is_a?(Hash) && extra.key?("receipt")
   end
 
   def pending?
