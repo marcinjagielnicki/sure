@@ -9,14 +9,15 @@ class ReceiptScansController < ApplicationController
   end
 
   def create
-    account = @accounts.find { |candidate| candidate.id == receipt_scan_params[:account_id] }
+    account_id = params.dig(:receipt_scan, :account_id).to_s
+    account = @accounts.find { |candidate| candidate.id == account_id }
     return render_new_with_error(t(".account_required")) unless account
 
     ReceiptScan.create_from_upload!(
       family: Current.family,
       user: Current.user,
       account: account,
-      uploads: Array(receipt_scan_params[:files]).compact_blank
+      uploads: Array(params.dig(:receipt_scan, :files)).select { |file| file.respond_to?(:read) }
     )
 
     redirect_to transactions_path, notice: t(".success")
@@ -27,10 +28,6 @@ class ReceiptScansController < ApplicationController
   private
     def set_accounts
       @accounts = Current.family.accounts.writable_by(Current.user).visible.alphabetically.to_a
-    end
-
-    def receipt_scan_params
-      params.fetch(:receipt_scan, {}).permit(:account_id, files: [])
     end
 
     def render_new_with_error(message)
