@@ -3,6 +3,7 @@ class ReceiptScansController < ApplicationController
 
   before_action :require_preview_features!
   requires_ai :extract_receipt
+  before_action :require_receipt_extraction
   before_action :set_accounts
 
   def new
@@ -26,6 +27,12 @@ class ReceiptScansController < ApplicationController
   end
 
   private
+    def require_receipt_extraction
+      return if ReceiptScan.extraction_available?(family: Current.family, user: Current.user)
+
+      redirect_back_or_to root_path, alert: t("receipt_scans.unavailable")
+    end
+
     def set_accounts
       @accounts = Current.family.accounts.writable_by(Current.user).visible.alphabetically.to_a
     end

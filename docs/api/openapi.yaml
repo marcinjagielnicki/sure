@@ -9145,6 +9145,13 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ReceiptScan"
+        '403':
+          description: receipt scanning is not available (no AI provider that can
+            read images)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
         '404':
           description: account not found or not writable
           content:

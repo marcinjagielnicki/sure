@@ -11,6 +11,21 @@ class Api::V1::ReceiptsControllerTest < ActionDispatch::IntegrationTest
     @admin.api_keys.active.destroy_all
     @api_key = create_api_key(@admin, "read_write")
     @read_only_api_key = create_api_key(@admin, "read")
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_receipt))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: true))
+  end
+
+  test "403 when receipt scanning is unavailable" do
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: false))
+
+    assert_no_difference "ReceiptScan.count" do
+      post api_v1_receipts_url,
+           params: { account_id: @account.id, files: [ receipt_upload ] },
+           headers: api_headers(@api_key)
+    end
+
+    assert_response :forbidden
+    assert_equal "ai_unavailable", JSON.parse(response.body)["error"]
   end
 
   teardown do
