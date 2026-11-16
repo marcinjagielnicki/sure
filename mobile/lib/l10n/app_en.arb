@@ -1228,5 +1228,14 @@
   "@receiptRemovePhoto": { "description": "Tooltip of the button that removes a selected receipt photo." },
 
   "addTransactionOption": "Transaction",
-  "@addTransactionOption": { "description": "Option in the add menu that opens the new transaction form." }
+  "@addTransactionOption": { "description": "Option in the add menu that opens the new transaction form." },
+
+  "receiptProcessing": "Processing receipt…",
+  "@receiptProcessing": { "description": "Badge on a transaction whose receipt is still being read." },
+
+  "receiptNeedsReview": "Needs review",
+  "@receiptNeedsReview": { "description": "Badge on a transaction whose receipt needs the user to check it." },
+
+  "receiptSectionTitle": "Receipt",
+  "@receiptSectionTitle": { "description": "Heading of the receipt section on the transaction screen." }
 }

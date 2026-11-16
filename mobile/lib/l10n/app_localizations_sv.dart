@@ -1296,4 +1296,13 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get addTransactionOption => 'Transaction';
+
+  @override
+  String get receiptProcessing => 'Processing receipt…';
+
+  @override
+  String get receiptNeedsReview => 'Needs review';
+
+  @override
+  String get receiptSectionTitle => 'Receipt';
 }
