@@ -1247,4 +1247,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cashFlowTransactionsLoadFailed => 'Couldn\'t load transactions';
+
+  @override
+  String get receiptScanTitle => 'Scan receipt';
+
+  @override
+  String get receiptTakePhoto => 'Take photo';
+
+  @override
+  String get receiptChooseFromGallery => 'Choose from gallery';
+
+  @override
+  String receiptMaxPhotos(int count) {
+    return 'Up to $count photos of one receipt';
+  }
+
+  @override
+  String get receiptAccountLabel => 'Paid from';
+
+  @override
+  String get receiptUpload => 'Upload receipt';
+
+  @override
+  String get receiptUploaded =>
+      'Receipt uploaded. Its transaction will be filled in shortly.';
+
+  @override
+  String receiptUploadFailed(String message) {
+    return 'Couldn\'t upload the receipt: $message';
+  }
+
+  @override
+  String get receiptRemovePhoto => 'Remove photo';
+
+  @override
+  String get addTransactionOption => 'Transaction';
 }

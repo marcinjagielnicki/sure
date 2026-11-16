@@ -2281,6 +2281,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load transactions'**
   String get cashFlowTransactionsLoadFailed;
+
+  /// Title of the receipt capture screen and the add-receipt option.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan receipt'**
+  String get receiptScanTitle;
+
+  /// Button that opens the camera to photograph a receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get receiptTakePhoto;
+
+  /// Button that picks receipt photos from the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from gallery'**
+  String get receiptChooseFromGallery;
+
+  /// Hint under the receipt photos explaining the photo limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {count} photos of one receipt'**
+  String receiptMaxPhotos(int count);
+
+  /// Label of the account picker on the receipt capture screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid from'**
+  String get receiptAccountLabel;
+
+  /// Button that uploads the receipt photos.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload receipt'**
+  String get receiptUpload;
+
+  /// Confirmation after a receipt upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt uploaded. Its transaction will be filled in shortly.'**
+  String get receiptUploaded;
+
+  /// Error shown when a receipt upload fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t upload the receipt: {message}'**
+  String receiptUploadFailed(String message);
+
+  /// Tooltip of the button that removes a selected receipt photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get receiptRemovePhoto;
+
+  /// Option in the add menu that opens the new transaction form.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction'**
+  String get addTransactionOption;
 }
 
 class _AppLocalizationsDelegate
