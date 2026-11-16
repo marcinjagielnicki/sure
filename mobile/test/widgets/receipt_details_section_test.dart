@@ -7,7 +7,7 @@ import 'package:sure_mobile/theme/sure_theme.dart';
 import 'package:sure_mobile/widgets/receipt_details_section.dart';
 
 void main() {
-  Future<void> pump(WidgetTester tester, TransactionReceipt? receipt) => tester.pumpWidget(MaterialApp(
+  Future<void> pump(WidgetTester tester, TransactionReceipt? receipt, {Map<String, String>? headers}) => tester.pumpWidget(MaterialApp(
         theme: SureTheme.light,
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: const [
@@ -16,7 +16,7 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        home: Scaffold(body: ReceiptDetailsSection(receipt: receipt)),
+        home: Scaffold(body: ReceiptDetailsSection(receipt: receipt, imageHeaders: headers)),
       ));
 
   testWidgets('lists items, review reasons and the status', (tester) async {
@@ -41,5 +41,27 @@ void main() {
     await pump(tester, null);
 
     expect(find.text('Receipt'), findsNothing);
+  });
+
+  testWidgets('loads receipt photos with the API credentials', (tester) async {
+    await pump(
+      tester,
+      TransactionReceipt(
+        status: 'completed',
+        attachments: const [
+          TransactionAttachment(
+            url: 'https://sure.test/api/v1/transactions/t/attachments/a',
+            thumbnailUrl: 'https://sure.test/api/v1/transactions/t/attachments/a?variant=thumbnail',
+            contentType: 'image/jpeg',
+            filename: 'r.jpg',
+          ),
+        ],
+      ),
+      headers: const {'X-Api-Key': 'key'},
+    );
+
+    final image = tester.widget<Image>(find.byType(Image)).image as NetworkImage;
+    expect(image.url, endsWith('?variant=thumbnail'));
+    expect(image.headers, {'X-Api-Key': 'key'});
   });
 }

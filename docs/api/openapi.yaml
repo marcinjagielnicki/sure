@@ -10900,6 +10900,57 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/transactions/{transaction_id}/attachments/{id}":
+    parameters:
+    - name: transaction_id
+      in: path
+      format: uuid
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      format: uuid
+      required: true
+      schema:
+        type: string
+    - name: variant
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+        - thumbnail
+      description: thumbnail returns a small preview of an image attachment
+    get:
+      summary: Download a transaction attachment
+      description: Returns the file attached to a transaction, such as a receipt photo,
+        using the API credentials. Transaction JSON links each attachment here.
+      tags:
+      - Transactions
+      security:
+      - apiKeyAuth: []
+      responses:
+        '200':
+          description: attachment file
+        '404':
+          description: transaction or attachment not found
+          content:
+            image/jpeg:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+            image/png:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+            image/webp:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+            application/pdf:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
   "/api/v1/transactions":
     get:
       summary: List transactions
