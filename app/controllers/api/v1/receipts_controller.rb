@@ -5,6 +5,10 @@ class Api::V1::ReceiptsController < Api::V1::BaseController
   before_action :ensure_write_scope, only: [ :create ]
 
   def create
+    unless ReceiptScan.extraction_available?(family: family, user: current_resource_owner)
+      return render_json({ error: "ai_unavailable", message: "Receipt scanning is not available on this instance." }, status: :forbidden)
+    end
+
     account = target_account
     return if performed?
 

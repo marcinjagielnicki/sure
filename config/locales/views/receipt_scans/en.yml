@@ -11,3 +11,4 @@ en:
       preview: Preview
       submit: Upload receipt
       title: Scan receipt
+    unavailable: Receipt scanning needs an AI provider that can read images (Anthropic). Set one up in Settings → Self-Hosting.

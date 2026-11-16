@@ -27,6 +27,13 @@ class ReceiptScan < ApplicationRecord
   InvalidUpload = Class.new(StandardError)
 
   class << self
+    # Whether receipts can be read for this family and user: the AI route allows it and the
+    # configured provider can read images (only Anthropic so far).
+    def extraction_available?(family:, user:)
+      Ai.available?(:extract_receipt, family:, user:) &&
+        Provider::Registry.preferred_llm_provider&.supports_receipt_extraction? == true
+    end
+
     # Stores the normalized files and gives the user a "Processing receipt…" transaction on the
     # account right away; ReceiptScan::ProcessJob fills it in. The caller authorizes the account.
     def create_from_upload!(family:, user:, account:, uploads:)

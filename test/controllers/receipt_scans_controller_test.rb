@@ -5,6 +5,25 @@ class ReceiptScansControllerTest < ActionDispatch::IntegrationTest
     sign_in @user = users(:family_admin)
     @account = accounts(:depository)
     Ai.stubs(:availability).returns(Ai::Availability.available(:extract_receipt))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: true))
+  end
+
+  test "redirects when the configured AI provider cannot read receipts" do
+    set_preview(true)
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: false))
+
+    get new_receipt_scan_url
+
+    assert_redirected_to root_path
+  end
+
+  test "transactions page hides receipt scanning when the AI provider cannot read receipts" do
+    set_preview(true)
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: false))
+
+    get transactions_url
+
+    assert_select "a[href='#{new_receipt_scan_path}']", count: 0
   end
 
   test "redirects without preview" do

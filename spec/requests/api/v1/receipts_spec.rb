@@ -22,6 +22,10 @@ RSpec.describe 'API V1 Receipts', type: :request do
     Account.create!(family: family, owner: user, name: 'Test Checking', balance: 1000, currency: 'USD', accountable: Depository.new)
   end
 
+  before do
+    allow(ReceiptScan).to receive(:extraction_available?).and_return(true)
+  end
+
   def receipt_file
     Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files/receipts/rotated.jpg'), 'image/jpeg')
   end
@@ -46,6 +50,14 @@ RSpec.describe 'API V1 Receipts', type: :request do
 
       response '202', 'receipt accepted for processing' do
         schema '$ref' => '#/components/schemas/ReceiptScan'
+        let(:account_id) { account.id }
+        let(:files) { [ receipt_file ] }
+        run_test!
+      end
+
+      response '403', 'receipt scanning is not available (no AI provider that can read images)' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+        before { allow(ReceiptScan).to receive(:extraction_available?).and_return(false) }
         let(:account_id) { account.id }
         let(:files) { [ receipt_file ] }
         run_test!
