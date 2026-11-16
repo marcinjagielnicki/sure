@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../models/account.dart';
 import '../models/transaction.dart';
 import '../models/offline_transaction.dart';
+import '../providers/accounts_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/categories_provider.dart';
 import '../providers/transactions_provider.dart';
+import '../screens/receipt_capture_screen.dart';
 import '../screens/transaction_edit_screen.dart';
 import '../screens/transaction_form_screen.dart';
 import '../widgets/account_detail_header.dart';
@@ -349,6 +351,50 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
     }
 
     return success;
+  }
+
+  void _showAddMenu() {
+    final l = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: Text(l.addTransactionOption),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showAddTransactionForm();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: Text(l.receiptScanTitle),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showReceiptCapture();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReceiptCapture() {
+    final accounts = context.read<AccountsProvider>().accounts;
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => ReceiptCaptureScreen(
+            accounts: accounts.isEmpty ? [widget.account] : accounts,
+            initialAccountId: widget.account.id,
+          ),
+        ))
+        .then((_) {
+      if (mounted) _loadTransactions();
+    });
   }
 
   void _showAddTransactionForm() {
@@ -750,7 +796,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTransactionForm,
+        onPressed: _showAddMenu,
         child: const Icon(Icons.add),
       ),
     );
