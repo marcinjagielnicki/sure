@@ -136,6 +136,20 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_equal "boom", @purchase.error
   end
 
+  test "an error while matching keeps what was read and waits for the payment" do
+    stub_purchase_provider
+    Purchase.any_instance.stubs(:apply_match!).raises(ActiveRecord::RecordNotUnique, "race")
+
+    assert_enqueued_email_with PurchaseMailer, :processed, params: { purchase: @purchase } do
+      process
+    end
+
+    @purchase.reload
+    assert_equal "awaiting_payment", @purchase.status
+    assert_equal 2, @purchase.items.count
+    assert DebugLogEntry.exists?(source: "Purchase::EmailProcessor", level: "warn")
+  end
+
   test "AI unavailable fails without calling the provider" do
     Ai.stubs(:availability).returns(Ai::Availability.unavailable(:extract_purchase, :not_configured))
     provider = stub_purchase_provider

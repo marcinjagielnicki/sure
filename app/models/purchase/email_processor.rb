@@ -29,7 +29,10 @@ class Purchase::EmailProcessor
 
       apply_extraction
     end
-    notify(outcome) if outcome
+    return unless outcome
+
+    match if outcome == :processed
+    notify(outcome)
   rescue StandardError => e
     record_failure(e)
   end
@@ -64,8 +67,24 @@ class Purchase::EmailProcessor
       end
 
       purchase.update!(status: :awaiting_payment, match_deadline_on: extraction.order_date&.+(Purchase::DEADLINE_DAYS))
-      purchase.apply_match!
       :processed
+    end
+
+    # Runs after what was read is saved, so a failure here (e.g. two jobs linking the same entry
+    # at once) only costs this attempt: the purchase waits and Purchase::MatchPendingJob retries.
+    def match
+      purchase.with_lock { purchase.apply_match! if purchase.awaiting_payment? }
+    rescue StandardError => e
+      purchase.reload
+      DebugLogEntry.capture(
+        category: "purchase_inbox",
+        level: "warn",
+        message: "Matching a new purchase failed: #{e.message}",
+        source: self.class.name,
+        family:,
+        user: purchase.user,
+        metadata: { purchase_id: purchase.id, error_class: e.class.name }
+      )
     end
 
     def record_order(problems)
