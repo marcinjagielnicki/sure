@@ -13,6 +13,13 @@ module PurchasesHelper
     end
   end
 
+  # "November 2026" for a month group's heading; languages where a month named on its own takes
+  # another form than in a date (Polish "Listopad", not "listopada") give it as standalone names.
+  def purchase_month_title(month)
+    names = I18n.t("date.standalone_month_names", default: nil) || I18n.t("date.month_names")
+    "#{names[month.month]} #{month.year}"
+  end
+
   # The shop's logo: Brandfetch by the shop's domain, else the linked transaction's merchant logo.
   def purchase_logo_url(purchase)
     Setting.brand_fetch_icon_url(purchase.merchant_domain) ||
