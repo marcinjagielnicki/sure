@@ -93,8 +93,12 @@ class Purchase::EmailText
       end
     end
 
+    # Labels some mail apps use for JPEG photos.
+    CONTENT_TYPE_ALIASES = { "image/jpg" => "image/jpeg", "image/pjpeg" => "image/jpeg" }.freeze
+
     def receipt_file(part)
       content_type = part.mime_type.to_s.downcase
+      content_type = CONTENT_TYPE_ALIASES.fetch(content_type, content_type)
       return unless content_type.in?(FILE_CONTENT_TYPES) || content_type.in?(ReceiptScan::ImageNormalizer::GENERIC_CONTENT_TYPES)
 
       data = part.decoded.to_s.b
