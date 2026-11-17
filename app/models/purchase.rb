@@ -101,6 +101,22 @@ class Purchase < ApplicationRecord
     Purchase::EmailProcessJob.perform_later(self)
   end
 
+  # Re-checks the stored AI read against the current total rules, without calling the AI again.
+  # Clears an items_mismatch the rules now accept; returns whether it did.
+  def revalidate_items_total!
+    raw = ai_metadata["raw_output"]
+    return false unless raw.is_a?(Hash) && review_reasons.any? { _1["reason"] == "items_mismatch" }
+
+    problems = Purchase::Validator.new(Purchase::Validator.extraction_from(raw), family:).problems
+    return false if problems.any? { _1["reason"] == "items_mismatch" }
+
+    update!(
+      review_reasons: review_reasons.reject { _1["reason"] == "items_mismatch" },
+      ai_metadata: ai_metadata.merge("validation" => Array(ai_metadata["validation"]).reject { _1["reason"] == "items_mismatch" })
+    )
+    true
+  end
+
   def flag!(reason_key, **details)
     update!(review_reasons: review_reasons + [ { "reason" => reason_key.to_s, **details.deep_stringify_keys } ])
   end

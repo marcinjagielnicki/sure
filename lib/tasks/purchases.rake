@@ -16,4 +16,12 @@ namespace :purchases do
 
     puts "created=#{created} skipped=#{skipped}"
   end
+
+  desc "Re-check stored order reads against the current total rules and clear outdated mismatch flags (no AI calls)"
+  task revalidate: :environment do
+    cleared = Purchase.email.where("review_reasons @> ?", [ { reason: "items_mismatch" } ].to_json)
+      .find_each.count(&:revalidate_items_total!)
+
+    puts "cleared=#{cleared}"
+  end
 end
