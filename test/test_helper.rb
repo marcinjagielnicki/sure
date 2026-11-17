@@ -95,6 +95,7 @@ module ActiveSupport
     include SqlQueryCapture
     include AiTestHelper
     include ReceiptTestHelper
+    include PurchaseTestHelper
 
     # Add more helper methods to be used by all tests here...
     def sign_in(user)

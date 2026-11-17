@@ -85,6 +85,14 @@ class Purchase < ApplicationRecord
     result.kind
   end
 
+  # Starts reading a failed order email again.
+  def reprocess!
+    return unless failed? && email?
+
+    update!(status: :processing, error: nil)
+    Purchase::EmailProcessJob.perform_later(self)
+  end
+
   def flag!(reason_key, **details)
     update!(review_reasons: review_reasons + [ { "reason" => reason_key.to_s, **details.deep_stringify_keys } ])
   end
