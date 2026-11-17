@@ -118,6 +118,21 @@ class Setting < RailsSettings::Base
   field :realie_api_key, type: :string, default: ENV["REALIE_API_KEY"]
   field :chimnie_api_key, type: :string, default: ENV["CHIMNIE_API_KEY"]
 
+  # Order mailbox (IMAP) that forwarded shop emails are read from. See PurchaseInbox.
+  field :purchase_inbox_enabled, type: :boolean, default: false
+  field :purchase_inbox_host, type: :string, default: ENV["PURCHASE_INBOX_IMAP_HOST"]
+  field :purchase_inbox_port, type: :integer, default: ENV.fetch("PURCHASE_INBOX_IMAP_PORT", 993).to_i
+  field :purchase_inbox_ssl, type: :boolean, default: ENV.fetch("PURCHASE_INBOX_IMAP_SSL", "true") == "true"
+  field :purchase_inbox_username, type: :string, default: ENV["PURCHASE_INBOX_IMAP_USERNAME"]
+  field :purchase_inbox_password, type: :string, default: ENV["PURCHASE_INBOX_IMAP_PASSWORD"]
+  field :purchase_inbox_folder, type: :string, default: ENV.fetch("PURCHASE_INBOX_IMAP_FOLDER", "INBOX")
+  field :purchase_inbox_processed_folder, type: :string, default: "Sure/Processed"
+  field :purchase_inbox_shop_domains, type: :array, default: [ "allegro.pl" ]
+  field :purchase_inbox_authserv_id, type: :string
+  field :purchase_inbox_require_sender_auth, type: :boolean, default: true
+  field :purchase_inbox_last_polled_at, type: :datetime
+  field :purchase_inbox_last_error, type: :string
+
   # Transparent encryption for API key fields.  The `field` macro defines the
   # raw getter/setter on the class.  By prepending this module we intercept
   # reads (decrypt) and writes (encrypt) while `super` delegates to the
@@ -136,6 +151,7 @@ class Setting < RailsSettings::Base
       rentcast_api_key
       realie_api_key
       chimnie_api_key
+      purchase_inbox_password
       openai_access_token
       anthropic_access_token
       jev_api_key

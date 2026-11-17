@@ -16,6 +16,8 @@ class Transaction < ApplicationRecord
   end
 
   has_one :receipt_scan, foreign_key: :transaction_id, dependent: :nullify, inverse_of: :linked_transaction
+  has_one :purchase, foreign_key: :transaction_id, inverse_of: :linked_transaction
+  before_destroy :release_purchase
 
   # Attachment validation constants
   MAX_ATTACHMENTS_PER_TRANSACTION = 10
@@ -669,6 +671,10 @@ class Transaction < ApplicationRecord
   end
 
   private
+    def release_purchase
+      purchase&.release_transaction!
+    end
+
     # Moves the pending transaction's attachments (the attachment rows themselves, so the
     # blobs are not purged with the pending entry) and adds its tags to the posted one.
     def carry_over_user_additions(from:, to:)

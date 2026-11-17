@@ -27,6 +27,8 @@ class User < ApplicationRecord
   has_many :sessions, dependent: :destroy
   has_many :chats, dependent: :destroy
   has_many :receipt_scans, dependent: :destroy
+  has_many :purchases, dependent: :destroy
+  has_many :purchase_inbox_routes, dependent: :destroy
   has_many :api_keys, dependent: :destroy
   has_many :push_subscriptions, dependent: :destroy
   has_many :webauthn_credentials, dependent: :destroy
