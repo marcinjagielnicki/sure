@@ -1,0 +1,60 @@
+Date: Sun, 22 Nov 2026 09:15:00 +0100
+From: Bob Dylan <bob@bobdylan.com>
+To: zakupy@example.com
+Message-ID: <e0fa7699290b3561@fixture.example>
+Subject: =?UTF-8?Q?Fwd:_Dzi=C4=99kujemy_za_zakup?=
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="--==_mimepart_6afc25c097f4c_1697fe05475d"
+Content-Transfer-Encoding: 7bit
+Authentication-Results: mx.google.com; dkim=pass header.i=@bobdylan.com
+ header.s=s1 header.b=abc; spf=pass smtp.mailfrom=bob@bobdylan.com; dmarc=pass
+ (p=NONE sp=NONE dis=NONE) header.from=bobdylan.com
+Delivered-To: zakupy@example.com
+
+
+----==_mimepart_6afc25c097f4c_1697fe05475d
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+---------- Forwarded message ---------
+Od: Allegro <powiadomienia@allegro.pl>
+Date: =C5=9Br., 12 lis 2026 o 18:42
+Subject: Dzi=C4=99kujemy za zakup
+To: <bob@bobdylan.com>
+Dzi=C4=99kujemy za zakup!
+Numer zam=C3=B3wienia: a1b2c3d4-0000-4000-8000-123456789abc
+Do zap=C5=82aty: 249,99 z=C5=82
+P=C5=82atno=C5=9B=C4=87: BLIK
+
+----==_mimepart_6afc25c097f4c_1697fe05475d
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<div>---------- Forwarded message ---------<br>Od: Allegro &lt;powiadomi=
+enia@allegro.pl&gt;<br>Date: =C5=9Br., 12 lis 2026 o 18:42<br>Subject: Dzi=
+=C4=99kujemy za zakup<br>To: &lt;bob@bobdylan.com&gt;<br></div><html><head><style>td{=
+color:red}</style><script>alert(1)</script></head><body>
+<h1>Dzi=C4=99kujemy za zakup!</h1>
+<p>Numer zam=C3=B3wienia: <b>a1b2c3d4-0000-4000-8000-123456789abc</b></p>=
+
+<p>Data zakupu: 12.11.2026</p>
+<table>
+  <tr><th>Przedmiot</th><th>Sprzedawca</th><th>Ilo=C5=9B=C4=87</th><th>Ce=
+na</th></tr>
+  <tr><td>Filtr HEPA do odkurzacza XR-200</td><td>sklep_agd</td><td>2</td=
+><td>79,98 z=C5=82</td></tr>
+  <tr><td>Kubek termiczny 450 ml</td><td>dom_i_kuchnia</td><td>1</td><td>=
+150,01 z=C5=82</td></tr>
+</table>
+<p>Dostawa: Allegro One Box, 20,00 z=C5=82</p>
+<p><a href=3D"https://allegro.pl/moje-allegro/zakupy/kupione/a1b2c3d4">Sz=
+czeg=C3=B3=C5=82y zam=C3=B3wienia</a></p>
+<p>Do zap=C5=82aty: <b>249,99 z=C5=82</b></p>
+<p>P=C5=82atno=C5=9B=C4=87: BLIK</p>
+<img src=3D"https://allegro.pl/logo.png" alt=3D"logo">
+</body></html>
+
+----==_mimepart_6afc25c097f4c_1697fe05475d--

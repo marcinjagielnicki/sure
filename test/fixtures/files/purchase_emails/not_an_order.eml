@@ -1,0 +1,16 @@
+Date: Sun, 22 Nov 2026 11:00:00 +0100
+From: Bob Dylan <bob@bobdylan.com>
+To: zakupy@example.com
+Message-ID: <e1f2746e2804310b@fixture.example>
+Subject: Fwd: Twoja paczka jest w drodze
+MIME-Version: 1.0
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+Authentication-Results: mx.google.com; dkim=pass header.i=@bobdylan.com;
+ dmarc=pass header.from=bobdylan.com
+
+---------- Forwarded message ---------
+Od: Allegro <powiadomienia@allegro.pl>
+
+Twoja paczka jest w drodze. Numer przesy=C5=82ki: 123456789.
