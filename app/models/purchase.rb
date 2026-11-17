@@ -117,6 +117,23 @@ class Purchase < ApplicationRecord
     true
   end
 
+  # The shop's domain for its logo, unless it is the domain the user forwards from: a manual
+  # forward we couldn't unwrap only shows the forwarder.
+  def shop_domain(domain)
+    return if domain.blank?
+
+    own = user.purchase_inbox_routes.sender.pluck(:value).map { Purchase::EmailText.registrable_domain(_1) }
+    domain unless own.include?(domain)
+  end
+
+  # Fills merchant_domain from the stored email without calling the AI.
+  def backfill_merchant_domain!
+    return false unless email? && merchant_domain.blank? && original_email.attached?
+
+    domain = shop_domain(Purchase::EmailText.new(Mail.new(original_email.download)).call.original_from_domain)
+    domain.present? && update!(merchant_domain: domain)
+  end
+
   def flag!(reason_key, **details)
     update!(review_reasons: review_reasons + [ { "reason" => reason_key.to_s, **details.deep_stringify_keys } ])
   end

@@ -50,6 +50,28 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_equal BigDecimal("249.99"), @purchase.total
   end
 
+  test "the shop's domain is stored for its logo" do
+    stub_purchase_provider
+
+    process
+
+    assert_equal "amazon.com", @purchase.reload.merchant_domain
+  end
+
+  # A forward whose block we can't recognize only shows the person who forwarded it.
+  test "the forwarding user's own domain is not taken as the shop's" do
+    purchase = Purchase.create!(family: @purchase.family, user: @purchase.user, source: :email, status: :processing)
+    mail = Mail.new(from: "Bob Dylan <bob@bobdylan.com>", subject: "Fwd: my order", body: "Order total $249.99")
+    purchase.original_email.attach(io: StringIO.new(mail.to_s), filename: "order.eml", content_type: "message/rfc822")
+    stub_purchase_provider
+
+    Purchase::EmailProcessor.new(purchase).process!
+
+    purchase.reload
+    assert_equal "awaiting_payment", purchase.status
+    assert_nil purchase.merchant_domain
+  end
+
   test "no candidate leaves it awaiting payment with a deadline" do
     stub_purchase_provider
 

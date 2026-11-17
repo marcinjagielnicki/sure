@@ -2067,6 +2067,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
     t.text "error"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "merchant_domain"
     t.index "family_id, lower((merchant)::text), lower((order_number)::text)", name: "index_purchases_on_family_merchant_order_number"
     t.index ["family_id", "ordered_on"], name: "index_purchases_on_family_id_and_ordered_on"
     t.index ["family_id", "status"], name: "index_purchases_on_family_id_and_status"

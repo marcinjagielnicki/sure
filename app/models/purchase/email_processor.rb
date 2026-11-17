@@ -95,7 +95,8 @@ class Purchase::EmailProcessor
         total: extraction.total,
         currency: extraction.currency,
         shipping_cost: extraction.shipping_cost,
-        payment_method: extraction.payment_method
+        payment_method: extraction.payment_method,
+        merchant_domain: purchase.shop_domain(email_text.original_from_domain)
       )
       problems.each { |problem| purchase.flag!(problem["reason"], **problem.except("reason").symbolize_keys) }
 
