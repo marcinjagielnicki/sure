@@ -159,6 +159,34 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{apply_categories_purchase_path(@matched)}']", count: 0
   end
 
+  test "a scanned receipt's photo is shown on its purchase" do
+    scan = receipt_scans(:processing)
+    scan.files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+    purchase = Purchase.create!(family: @user.family, user: @user, source: :receipt, status: :unmatched, receipt_scan: scan)
+
+    get purchase_url(purchase)
+
+    assert_select "[data-testid=purchase-receipt] img[src*='receipt.jpg']"
+  end
+
+  test "an emailed receipt shows its photo and PDF" do
+    @matched.receipt_files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+    @matched.receipt_files.attach(io: StringIO.new("%PDF-1.4"), filename: "invoice.pdf", content_type: "application/pdf")
+
+    get purchase_url(@matched)
+
+    assert_select "[data-testid=purchase-receipt]" do
+      assert_select "img[src*='receipt.jpg']"
+      assert_select "a[href*='invoice.pdf']", text: /invoice\.pdf/
+    end
+  end
+
+  test "a purchase without a receipt has no receipt card" do
+    get purchase_url(@matched)
+
+    assert_select "[data-testid=purchase-receipt]", count: 0
+  end
+
   test "another member's unlinked purchase is not found" do
     member = users(:family_member)
     member.update!(preferences: member.preferences.merge("preview_features_enabled" => true))

@@ -36,6 +36,11 @@
     <%= render DS::Alert.new(variant: :warning, message: @purchase.review_reasons.map { purchase_review_reason(@purchase, _1) }.uniq.to_sentence) %>
   <% end %>
 
+  <% receipt_documents = @purchase.receipt_documents_for(Current.user) %>
+  <% if receipt_documents.any? %>
+    <%= render "purchases/receipt", files: receipt_documents %>
+  <% end %>
+
   <% if @purchase.items.any? %>
     <%= render DS::Card.new(class: "gap-1") do %>
       <h2 class="text-sm font-medium text-primary">

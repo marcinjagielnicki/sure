@@ -76,6 +76,20 @@ class Purchase < ApplicationRecord
     Purchase::Linker.new(self).unlink!
   end
 
+  # The receipt's files the user may open: a scanned receipt's follow the scan's account, an
+  # emailed receipt's its owner and the linked transaction's account (as blob access does).
+  def receipt_documents_for(user)
+    allowed =
+      if receipt_scan
+        receipt_scan.account.shared_with?(user)
+      else
+        user_id == user.id || linked_transaction&.entry&.account&.shared_with?(user)
+      end
+    return [] unless allowed
+
+    (receipt_scan ? receipt_scan.files : receipt_files).attachments.includes(:blob).to_a
+  end
+
   def categories_held_back?
     Purchase::Linker.new(self).categories_held_back?
   end
