@@ -43,8 +43,10 @@
           <span class="block text-primary truncate"><%= @entry.name %></span>
           <span class="block text-xs text-secondary"><%= l(@entry.date, format: :short_with_year) %> &middot; <%= @entry.account.name %></span>
         <% end %>
-        <%= render DS::Button.new(text: t(".unlink"), href: purchase_link_path(@purchase), method: :delete, variant: :outline, size: :sm,
-                                  data: { turbo_confirm: t(".unlink_confirm") }) %>
+        <% if @purchase.changeable_by?(Current.user) %>
+          <%= render DS::Button.new(text: t(".unlink"), href: purchase_link_path(@purchase), method: :delete, variant: :outline, size: :sm,
+                                    data: { turbo_confirm: t(".unlink_confirm") }) %>
+        <% end %>
       </div>
     <% elsif @purchase.matched? %>
       <p class="text-sm text-secondary"><%= t(".linked_elsewhere") %></p>
@@ -73,7 +75,7 @@
   <% end %>
 
   <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">
-    <% if @purchase.email? && @purchase.original_email.attached? %>
+    <% if @purchase.email? && @purchase.original_email.attached? && @purchase.user_id == Current.user.id %>
       <%= render DS::Link.new(text: t(".download_email"), href: original_email_purchase_path(@purchase), variant: :default, icon: "download", class: "text-sm", data: { turbo: false }) %>
     <% end %>
     <% if @purchase.receipt? && @entry %>

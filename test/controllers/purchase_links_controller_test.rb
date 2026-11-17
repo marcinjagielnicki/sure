@@ -60,4 +60,17 @@ class PurchaseLinksControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to purchase_url(@purchase)
     assert_nil @purchase.reload.transaction_id
   end
+
+  test "a member who can only see the transaction can't unlink someone else's purchase" do
+    @purchase.link!(@entry)
+    member = users(:family_member)
+    member.update!(preferences: member.preferences.merge("preview_features_enabled" => true))
+    accounts(:depository).account_shares.find_by(user: member).update!(permission: "read_only")
+    sign_in member
+
+    delete purchase_link_url(@purchase)
+
+    assert_redirected_to purchase_url(@purchase)
+    assert_equal @entry.entryable, @purchase.reload.linked_transaction
+  end
 end

@@ -53,6 +53,14 @@ class Purchase < ApplicationRecord
     )
   }
 
+  # Its own user, or someone who may change the transaction it is linked to.
+  def changeable_by?(user)
+    return true if user_id == user.id
+    return false unless linked_transaction
+
+    Account.annotatable_by(user).where(id: linked_transaction.entry.account_id).exists?
+  end
+
   def match_window_days
     paid_by_cash_on_delivery? ? COD_MATCH_WINDOW_DAYS : MATCH_WINDOW_DAYS
   end
