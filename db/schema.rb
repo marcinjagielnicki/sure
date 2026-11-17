@@ -133,6 +133,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
     t.check_constraint "cost_basis_method::text = ANY (ARRAY['average'::character varying::text, 'fifo'::character varying::text])", name: "accounts_cost_basis_method_known"
   end
 
+  create_table "action_mailbox_inbound_emails", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "message_checksum", null: false
+    t.string "message_id", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["message_id", "message_checksum"], name: "index_action_mailbox_inbound_emails_uniqueness", unique: true
+  end
+
   create_table "active_storage_attachments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "blob_id", null: false
     t.datetime "created_at", null: false
