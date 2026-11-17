@@ -87,6 +87,23 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert @purchase.ai_metadata["files"].all? { _1["bytes"].positive? }
   end
 
+  test "when the model rejects the attachments the order is still read from its text" do
+    attach_email_with_files
+    provider = stub_purchase_provider
+    provider.expects(:extract_purchase).with { |**args| args[:files].any? }
+            .returns(Provider::Response.new(success?: false, data: nil, error: Provider::Anthropic::Error.new("A maximum of 100 PDF pages may be provided")))
+    provider.expects(:extract_purchase).with { |**args| args[:files].empty? }
+            .returns(Provider::Response.new(success?: true, data: build_purchase_extraction, error: nil))
+
+    process
+
+    @purchase.reload
+    assert_equal "awaiting_payment", @purchase.status
+    assert_empty @purchase.receipt_files
+    assert @purchase.ai_metadata["files"].none? { _1["receipt"] }
+    assert @purchase.ai_metadata["files_rejected"]
+  end
+
   test "a purchase paid in cash isn't matched to a bank payment" do
     payment(date: @ordered_on)
     stub_purchase_provider(build_purchase_extraction(payment_method: "cash"))
@@ -245,7 +262,7 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     def attach_email_with_files
       mail = Mail.new(from: "Bob Dylan <bob@bobdylan.com>", subject: "Receipt", body: "My receipt")
       mail.add_file(filename: "receipt.png", content: Vips::Image.gaussnoise(300, 300).cast(:uchar).pngsave_buffer)
-      mail.add_file(filename: "terms.pdf", content: "%PDF-1.4\n" + ("x" * 25_000))
+      mail.add_file(filename: "terms.pdf", content: build_pdf)
       @purchase.original_email.attach(io: StringIO.new(mail.to_s), filename: "order.eml", content_type: "message/rfc822")
     end
 

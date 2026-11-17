@@ -158,6 +158,29 @@ class Purchase::LinkerTest < ActiveSupport::TestCase
     assert_equal 1, @purchase.reload.receipt_files.count
   end
 
+  test "the owner sees the receipt only while they can open the linked transaction's account" do
+    owner = @purchase.user
+    @purchase.receipt_files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+    assert_equal 1, @purchase.receipt_documents_for(owner).size
+
+    @purchase.link!(@entry)
+    Account.any_instance.stubs(:shared_with?).returns(false)
+
+    assert_empty @purchase.reload.receipt_documents_for(owner)
+  end
+
+  test "a released purchase takes its receipt off the transaction the bank's copy moved it to" do
+    @purchase.receipt_files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+    @purchase.link!(@entry)
+    posted = create_transaction(account: accounts(:depository), amount: 100, date: Date.current, name: "Allegro posted")
+    posted.entryable.attachments.attach(@purchase.receipt_files.blobs)
+
+    @purchase.release_transaction!
+
+    assert_empty posted.entryable.reload.attachments
+    assert_equal 1, @purchase.reload.receipt_files.count
+  end
+
   test "receipt files that would exceed the transaction's attachment limit stay on the purchase" do
     Transaction::MAX_ATTACHMENTS_PER_TRANSACTION.times do |index|
       @entry.entryable.attachments.attach(io: StringIO.new("x#{index}"), filename: "f#{index}.pdf", content_type: "application/pdf")
