@@ -23,4 +23,22 @@ module PurchasesHelper
   def purchase_item_quantity(item)
     "#{item.quantity.to_s("F").delete_suffix(".0")}×" if item.quantity
   end
+
+  # The three tiles above the purchases list: label, value (with its colour) and caption.
+  def purchase_summary_tiles(summary)
+    spent = safe_join([
+      format_money(summary.spent),
+      (tag.span("+ #{summary.other_spent.map { format_money(_1) }.join(" + ")}", class: "text-sm text-secondary") if summary.other_spent.any?)
+    ].compact, " ")
+    waiting = summary.to_match_count.positive?
+
+    [
+      { label: t("purchases.summary.this_month"), value: spent, value_class: "text-primary privacy-sensitive",
+        caption: "#{t("purchases.summary.purchases", count: summary.purchases_count)} · #{t("purchases.summary.items", count: summary.items_count)}" },
+      { label: t("purchases.summary.to_match"), value: summary.to_match_count, value_class: waiting ? "text-warning" : "text-primary",
+        caption: waiting ? t("purchases.summary.to_match_waiting") : t("purchases.summary.to_match_none") },
+      { label: t("purchases.summary.top_merchant"), value: summary.top_merchant || "—", value_class: "text-primary",
+        caption: summary.top_merchant ? t("purchases.summary.top_merchant_orders", count: summary.top_merchant_count) : t("purchases.summary.top_merchant_none") }
+    ]
+  end
 end
