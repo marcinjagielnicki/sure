@@ -42,7 +42,9 @@ class PurchaseLinksController < ApplicationController
 
     def candidates
       ids = @purchase.match_candidate_entry_ids | Purchase::Matcher.new(@purchase).result.entries.map(&:id)
-      transaction_entries.where(id: ids).order(:date)
+      transaction_entries.where(id: ids)
+        .where.not(entryable_id: Purchase.where.not(transaction_id: nil).where.not(id: @purchase.id).select(:transaction_id))
+        .order(:date)
     end
 
     def search

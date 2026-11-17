@@ -24,6 +24,7 @@ class Purchase::Linker
         match_candidate_entry_ids: []
       )
       transaction.update!(extra: transaction.extra.merge("purchase" => summary))
+      forget_candidate_elsewhere(entry)
 
       if (reason = mismatch_reason(entry))
         purchase.flag!(reason, entry_id: entry.id) if manual
@@ -53,6 +54,13 @@ class Purchase::Linker
 
   private
     attr_reader :purchase
+
+    # Other purchases waiting for a pick (e.g. an identical order) no longer offer this entry.
+    def forget_candidate_elsewhere(entry)
+      Purchase.where(family_id: purchase.family_id).where.not(id: purchase.id)
+        .where("? = ANY(match_candidate_entry_ids)", entry.id)
+        .update_all([ "match_candidate_entry_ids = array_remove(match_candidate_entry_ids, ?::uuid), updated_at = ?", entry.id, Time.current ])
+    end
 
     def annotatable?(entry)
       Account.annotatable_by(purchase.user).where(id: entry.account_id, family_id: purchase.family_id).exists?
