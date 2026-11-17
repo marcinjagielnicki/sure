@@ -377,6 +377,20 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_equal bank.entryable, scan.reload.purchase.linked_transaction
   end
 
+  test "a receipt merged into a transaction an order email already paid still completes" do
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new)
+    purchases(:allegro_awaiting).update!(linked_transaction: bank.entryable, status: :matched)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+
+    process(scan)
+
+    assert scan.reload.completed?
+    assert_equal bank.entryable, scan.linked_transaction
+    assert_equal "unmatched", scan.purchase.status
+  end
+
   test "an unreadable currency keeps the account currency" do
     scan = upload("rotated.jpg", "image/jpeg")
     stub_extraction(currency: "ZL")

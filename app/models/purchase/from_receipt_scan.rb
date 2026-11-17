@@ -17,20 +17,27 @@ class Purchase::FromReceiptScan
 
   def sync!
     purchase = Purchase.find_or_initialize_by(receipt_scan_id: scan.id)
+    # An order email may already have claimed the transaction; it keeps it and this receipt's
+    # purchase stays unlinked for the user to sort out.
+    owner = Purchase.where(transaction_id: scan.transaction_id).where.not(id: purchase.id).first if scan.transaction_id
+    transaction = owner ? nil : scan.linked_transaction
+    reasons = scan.review_reasons
+    reasons += [ { "reason" => "already_linked", "purchase_id" => owner.id } ] if owner
+
     Purchase.transaction do
       purchase.update!(
         family: scan.family,
         user: scan.user,
         source: :receipt,
-        linked_transaction: scan.linked_transaction,
-        status: scan.linked_transaction ? :matched : :unmatched,
-        matched_at: scan.linked_transaction ? (purchase.matched_at || Time.current) : nil,
+        linked_transaction: transaction,
+        status: transaction ? :matched : :unmatched,
+        matched_at: transaction ? (purchase.matched_at || Time.current) : nil,
         merchant: extraction["merchant"],
         ordered_on: extraction["date"].presence || scan.linked_transaction&.entry&.date,
         total: extraction["total"],
         currency: extraction["currency"].presence || scan.account.currency,
         payment_method: PAYMENT_METHODS.fetch(extraction["payment_method"].to_s, "unknown"),
-        review_reasons: scan.review_reasons,
+        review_reasons: reasons,
         ai_metadata:
       )
       replace_items(purchase)
