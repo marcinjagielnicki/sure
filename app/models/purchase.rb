@@ -1,0 +1,71 @@
+# Something a family member bought, read from a forwarded order email or a scanned receipt, with
+# its line items and, once known, the bank transaction that paid for it.
+class Purchase < ApplicationRecord
+  # Days after the order date in which a bank transaction counts as its payment.
+  MATCH_WINDOW_DAYS = 3
+  # Cash on delivery is paid when the parcel arrives and recorded by hand.
+  COD_MATCH_WINDOW_DAYS = 14
+  # After this many days without a payment the user is told the purchase is unmatched.
+  DEADLINE_DAYS = 14
+  # Matching keeps trying this long after the order date, for statements imported monthly.
+  MATCH_HORIZON_DAYS = 90
+  OPEN_STATUSES = %w[awaiting_payment needs_matching unmatched].freeze
+
+  belongs_to :family
+  belongs_to :user
+  # Not `:transaction`: that name would shadow ActiveRecord::Base#transaction.
+  belongs_to :linked_transaction, class_name: "Transaction", foreign_key: :transaction_id, optional: true, inverse_of: :purchase
+  belongs_to :receipt_scan, optional: true
+
+  has_many :items, -> { order(:position) }, class_name: "PurchaseItem", dependent: :destroy, inverse_of: :purchase
+  has_one_attached :original_email
+
+  enum :source, { email: "email", receipt: "receipt" }, validate: true
+  enum :status, {
+    processing: "processing",
+    awaiting_payment: "awaiting_payment",
+    needs_matching: "needs_matching",
+    matched: "matched",
+    unmatched: "unmatched",
+    dismissed: "dismissed",
+    rejected: "rejected",
+    failed: "failed"
+  }, validate: true
+  enum :payment_method, {
+    card: "card",
+    blik: "blik",
+    transfer: "transfer",
+    cash_on_delivery: "cash_on_delivery",
+    installments: "installments",
+    other: "other",
+    unknown: "unknown"
+  }, prefix: :paid_by, validate: true
+
+  scope :to_match, -> { where(status: OPEN_STATUSES) }
+
+  # Purchases a user may see: their own, and others' that are linked to a transaction on an
+  # account the user can access.
+  scope :visible_to, ->(user) {
+    where(user_id: user.id).or(
+      where(transaction_id: Transaction.joins(:entry).where(entries: { account_id: Account.accessible_by(user).select(:id) }).select(:id))
+    )
+  }
+
+  def match_window_days
+    paid_by_cash_on_delivery? ? COD_MATCH_WINDOW_DAYS : MATCH_WINDOW_DAYS
+  end
+
+  def flag!(reason_key, **details)
+    update!(review_reasons: review_reasons + [ { "reason" => reason_key.to_s, **details.deep_stringify_keys } ])
+  end
+
+  # Called when the linked transaction is about to be deleted: an email purchase goes back to
+  # waiting for its payment, a receipt purchase stays as history without a transaction.
+  def release_transaction!
+    update!(
+      transaction_id: nil,
+      matched_at: nil,
+      status: email? ? :awaiting_payment : :unmatched
+    )
+  end
+end

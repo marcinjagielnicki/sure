@@ -28,6 +28,8 @@ class User < ApplicationRecord
   has_many :chats, dependent: :destroy
   # A scan belongs to its account; it stays there when the member who uploaded it is removed.
   has_many :receipt_scans, dependent: :nullify
+  has_many :purchases, dependent: :destroy
+  has_many :purchase_inbox_routes, dependent: :destroy
   has_many :api_keys, dependent: :destroy
   has_many :push_subscriptions, dependent: :destroy
   has_many :web_push_subscriptions, dependent: :destroy
