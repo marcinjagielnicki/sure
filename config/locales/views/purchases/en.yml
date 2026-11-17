@@ -45,6 +45,7 @@ en:
       transfer: The linked transaction is a transfer, so it wasn't categorized.
       not_an_order: The email isn't an order confirmation.
       duplicate: This order was already added from another email.
+      already_linked: Its transaction already belongs to another purchase, so this one isn't linked.
     ai_metadata:
       title: What the AI read
       summary: "Model %{model}, prompt version %{version}."

@@ -39,4 +39,16 @@ class Purchase::FromReceiptScanTest < ActiveSupport::TestCase
 
     assert_equal "unmatched", purchase.status
   end
+
+  test "a transaction that already has an email purchase keeps it; the receipt purchase stays unlinked" do
+    email_purchase = purchases(:allegro_awaiting)
+    email_purchase.update!(linked_transaction: @entry.entryable, status: :matched)
+
+    purchase = Purchase::FromReceiptScan.sync!(@scan, extraction_hash: @extraction, ai_metadata: {})
+
+    assert_equal "unmatched", purchase.status
+    assert_nil purchase.transaction_id
+    assert_equal({ "reason" => "already_linked", "purchase_id" => email_purchase.id }, purchase.review_reasons.last)
+    assert_equal @entry.entryable, email_purchase.reload.linked_transaction
+  end
 end
