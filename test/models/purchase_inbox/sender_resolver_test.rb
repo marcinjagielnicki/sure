@@ -77,6 +77,37 @@ class PurchaseInbox::SenderResolverTest < ActiveSupport::TestCase
     assert_equal "sender_not_authenticated", resolve(raw).reason
   end
 
+  test "an ARC pass alone doesn't authenticate the sender" do
+    assert_equal "sender_not_authenticated", resolve(with_results("mx.google.com; arc=pass (i=1); dkim=none; dmarc=none")).reason
+  end
+
+  test "DMARC must name the sender's domain" do
+    assert_equal "sender_not_authenticated", resolve(with_results("mx.google.com; dmarc=pass")).reason
+    assert_equal "sender_not_authenticated", resolve(with_results("mx.google.com; dmarc=pass header.from=other.example")).reason
+  end
+
+  test "an email with several From addresses is not authenticated" do
+    mail = Mail.new(fixture("amazon_manual_forward.eml"))
+    mail.from = [ "bob@bobdylan.com", "mallory@evil.example" ]
+
+    assert_equal "sender_not_authenticated", resolve(mail.to_s).reason
+  end
+
+  test "a plus tag in To or Cc doesn't route the email" do
+    mail = Mail.new(fixture("amazon_auto_forward.eml"))
+    mail.header["Delivered-To"] = nil
+    mail.header["X-Forwarded-To"] = nil
+    mail.to = "orders+bob@example.com"
+
+    assert_equal "unknown_sender", resolve(mail.to_s).reason
+  end
+
+  test "a plus tag on another mailbox's address doesn't route the email" do
+    raw = fixture("amazon_auto_forward.eml").gsub("orders+bob@example.com", "someone+bob@elsewhere.example")
+
+    assert_equal "unknown_sender", resolve(raw).reason
+  end
+
   test "authentication can be turned off" do
     @config = inbox_config(require_sender_auth: false)
     mail = Mail.new(fixture("amazon_manual_forward.eml"))
@@ -92,6 +123,13 @@ class PurchaseInbox::SenderResolverTest < ActiveSupport::TestCase
 
     def fixture(name)
       file_fixture("purchase_emails/#{name}").read
+    end
+
+    def with_results(value)
+      mail = Mail.new(fixture("amazon_manual_forward.eml"))
+      mail.header["Authentication-Results"] = nil
+      mail.header["Authentication-Results"] = value
+      mail.to_s
     end
 
     def auto_forward(from:, header_d:)
