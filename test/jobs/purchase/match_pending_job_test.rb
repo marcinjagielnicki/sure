@@ -47,6 +47,32 @@ class Purchase::MatchPendingJobTest < ActiveJob::TestCase
     assert_equal "matched", @purchase.reload.status
   end
 
+  test "a purchase that gets several candidates later asks the user to pick, once" do
+    payment(date: @ordered_on)
+    payment(date: @ordered_on + 1.day)
+
+    assert_enqueued_email_with PurchaseMailer, :needs_matching, params: { purchase: @purchase } do
+      perform
+    end
+    assert_equal "needs_matching", @purchase.reload.status
+
+    assert_no_enqueued_emails { perform }
+  end
+
+  test "a purchase still waiting for a pick at the deadline gets one reminder" do
+    payment(date: @ordered_on)
+    payment(date: @ordered_on + 1.day)
+    @purchase.apply_match!
+
+    travel_to @ordered_on + Purchase::DEADLINE_DAYS + 1.day do
+      assert_enqueued_email_with PurchaseMailer, :needs_matching, params: { purchase: @purchase } do
+        perform
+      end
+      assert_equal "needs_matching", @purchase.reload.status
+      assert_no_enqueued_emails { perform }
+    end
+  end
+
   test "purchases older than the horizon are left alone" do
     @purchase.update!(ordered_on: Date.current - Purchase::MATCH_HORIZON_DAYS - 1.day)
     payment(date: @purchase.ordered_on)

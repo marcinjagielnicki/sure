@@ -19,6 +19,11 @@ en:
       heading: "We haven't found the payment for your order from %{merchant}"
       body: "No transaction of %{total} has shown up in the %{days} days since the order. We'll keep looking, or you can link it yourself."
       link_button: Review purchases to match
+    needs_matching:
+      subject: "Pick the payment: %{merchant}, %{total}"
+      heading: "Which payment was your order from %{merchant}?"
+      body: "Several transactions of %{total} could be this order. Pick the right one so its items are recorded on it."
+      link_button: Pick the payment
     rejected:
       subject: "Email not added: %{merchant}"
       heading: We couldn't add the email you forwarded
