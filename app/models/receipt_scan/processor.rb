@@ -179,7 +179,7 @@ class ReceiptScan::Processor
       return if extraction.total.nil? || entry.amount != extraction.total
       return if entry.entryable.category_set_by_user?
 
-      groups = ReceiptScan::CategoryAllocator.new(extraction, categories: family.categories).groups
+      groups = Purchase::CategoryAllocator.new(total: extraction.total, items: extraction.line_items, categories: family.categories).groups
       if groups.one?
         entry.entryable.update!(category: groups.first[:category]) if groups.first[:category]
       elsif groups.many? && entry.entryable.pending?

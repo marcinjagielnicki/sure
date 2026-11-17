@@ -309,7 +309,7 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
   test "an error after extraction marks the scan failed instead of raising" do
     scan = upload("rotated.jpg", "image/jpeg")
     stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
-    ReceiptScan::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
+    Purchase::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
 
     assert_difference -> { DebugLogEntry.count }, 1 do
       assert_nothing_raised { process(scan) }
