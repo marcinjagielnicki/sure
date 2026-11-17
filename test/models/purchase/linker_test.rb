@@ -90,6 +90,63 @@ class Purchase::LinkerTest < ActiveSupport::TestCase
     assert_equal "matched", @purchase.reload.status
   end
 
+  test "a category the user set is held back, and the order's categories can be applied on request" do
+    @entry.entryable.update!(category: @shopping)
+    @entry.entryable.lock_attr!(:category_id)
+    @purchase.link!(@entry)
+    assert @purchase.reload.categories_held_back?
+
+    @purchase.apply_categories!(users(:family_admin))
+
+    children = @entry.reload.child_entries.order(:amount)
+    assert_equal [ @household, @food ], children.map { _1.entryable.category }
+    assert_not @purchase.reload.categories_held_back?
+  end
+
+  test "applying one category replaces the user's and locks it" do
+    @purchase.items.where(name: "Soap").update_all(category_id: @food.id)
+    @entry.entryable.update!(category: @shopping)
+    @entry.entryable.lock_attr!(:category_id)
+    @purchase.link!(@entry)
+
+    @purchase.apply_categories!(users(:family_admin))
+
+    transaction = @entry.reload.entryable
+    assert_equal @food, transaction.category
+    assert transaction.locked?(:category_id)
+    assert_not @purchase.reload.categories_held_back?
+  end
+
+  test "nothing is held back when the user's category already is the order's" do
+    @purchase.items.where(name: "Soap").update_all(category_id: @food.id)
+    @entry.entryable.update!(category: @food)
+    @entry.entryable.lock_attr!(:category_id)
+
+    @purchase.link!(@entry)
+
+    assert_not @purchase.reload.categories_held_back?
+  end
+
+  test "nothing is held back once the order's categories were applied, or for an unlinked purchase" do
+    assert_not @purchase.categories_held_back?
+
+    @purchase.link!(@entry)
+
+    assert_not @purchase.reload.categories_held_back?
+  end
+
+  test "applying categories needs a linked transaction the user can change" do
+    assert_raises(Purchase::LinkError) { @purchase.apply_categories!(users(:family_admin)) }
+
+    @entry.entryable.update!(category: @shopping)
+    @entry.entryable.lock_attr!(:category_id)
+    @purchase.link!(@entry)
+    Account.stubs(:annotatable_by).returns(Account.none)
+
+    assert_raises(Purchase::LinkError) { @purchase.apply_categories!(users(:family_member)) }
+    assert_equal @shopping, @entry.reload.entryable.category
+  end
+
   test "an already split transaction is linked without changes" do
     @entry.split!([ { name: "A", amount: 50, category_id: nil }, { name: "B", amount: 50, category_id: nil } ])
 

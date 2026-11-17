@@ -133,6 +133,32 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a purchase whose transaction keeps the user's category offers the order's categories" do
+    hold_back_categories
+
+    get purchase_url(@matched)
+
+    assert_select "[data-testid=purchase-payment]" do
+      assert_select "*", text: /You set this transaction's category yourself/
+      assert_select "form[action='#{apply_categories_purchase_path(@matched)}']"
+    end
+  end
+
+  test "applying the order's categories replaces the user's category" do
+    hold_back_categories
+
+    post apply_categories_purchase_url(@matched)
+
+    assert_redirected_to purchase_path(@matched)
+    assert_equal categories(:food_and_drink), @matched.linked_transaction.reload.category
+  end
+
+  test "applied categories leave nothing to offer" do
+    get purchase_url(@matched)
+
+    assert_select "form[action='#{apply_categories_purchase_path(@matched)}']", count: 0
+  end
+
   test "another member's unlinked purchase is not found" do
     member = users(:family_member)
     member.update!(preferences: member.preferences.merge("preview_features_enabled" => true))
@@ -216,4 +242,11 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "$10.95"
     assert_includes response.body, "$80.00"
   end
+
+  private
+    def hold_back_categories
+      transaction = @matched.linked_transaction
+      transaction.update!(category: @user.family.categories.create!(name: "Shopping", color: "#000000"))
+      transaction.lock_attr!(:category_id)
+    end
 end

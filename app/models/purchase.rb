@@ -73,6 +73,14 @@ class Purchase < ApplicationRecord
     Purchase::Linker.new(self).unlink!
   end
 
+  def categories_held_back?
+    Purchase::Linker.new(self).categories_held_back?
+  end
+
+  def apply_categories!(user)
+    Purchase::Linker.new(self).apply_categories!(user)
+  end
+
   def dismiss!
     update!(status: :dismissed, match_candidate_entry_ids: [])
   end

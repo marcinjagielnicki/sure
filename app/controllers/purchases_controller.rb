@@ -2,7 +2,7 @@
 class PurchasesController < ApplicationController
   before_action :require_preview_features!
   before_action :set_purchase, except: :index
-  before_action :ensure_can_change, only: %i[dismiss reprocess]
+  before_action :ensure_can_change, only: %i[dismiss reprocess apply_categories]
 
   def index
     @tab = params[:tab] == "to_match" ? "to_match" : "all"
@@ -36,6 +36,13 @@ class PurchasesController < ApplicationController
     else
       redirect_to purchase_path(@purchase)
     end
+  end
+
+  def apply_categories
+    @purchase.apply_categories!(Current.user)
+    redirect_to purchase_path(@purchase), notice: t(".applied")
+  rescue Purchase::LinkError
+    redirect_to purchase_path(@purchase), alert: t("purchases.not_authorized")
   end
 
   def original_email
