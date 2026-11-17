@@ -467,6 +467,19 @@ class ActiveStorageAuthorizationTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "only the purchase's owner can fetch its original email" do
+    purchase = purchases(:allegro_matched)
+    purchase.original_email.attach(io: StringIO.new("From: a@b.c\r\n\r\nhome address"), filename: "order.eml", content_type: "message/rfc822")
+
+    sign_in users(:family_member)
+    get rails_blob_path(purchase.original_email)
+    assert_response :not_found
+
+    sign_in users(:family_admin)
+    get rails_blob_path(purchase.original_email)
+    assert_response :redirect
+  end
+
   test "every attachment is either access-checked or intentionally public" do
     # Logos and avatars are not sensitive. Archived exports have no owning family;
     # ArchivedExportsController releases them by download token.
