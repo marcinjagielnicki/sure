@@ -62,6 +62,17 @@ class Settings::PurchaseInboxesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to settings_profile_path
   end
 
+  test "a family admin who can't manage instance settings can't see the page" do
+    @admin.update!(role: :admin)
+    User.any_instance.stubs(:manages_instance_settings?).returns(false)
+    DebugLogEntry.capture(category: "purchase_inbox", level: "info", message: "Order email rejected: unknown_sender",
+                          source: "PurchasesMailbox", metadata: { reason: "unknown_sender", from: "other-family@example.com" })
+
+    get settings_purchase_inbox_url
+
+    assert_redirected_to settings_profile_path
+  end
+
   test "update stores the connection and keeps the password when left blank" do
     patch settings_purchase_inbox_url, params: { setting: {
       host: "imap.example.com", port: "993", ssl: "1", username: "orders@example.com", password: "first",
@@ -94,7 +105,7 @@ class Settings::PurchaseInboxesControllerTest < ActionDispatch::IntegrationTest
 
     patch settings_purchase_inbox_url, params: { setting: { host: "evil.example.com" } }
 
-    assert_redirected_to settings_purchase_inbox_url
+    assert_redirected_to settings_profile_path
     assert_nil Setting.purchase_inbox_host
   end
 
