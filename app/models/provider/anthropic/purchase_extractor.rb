@@ -7,7 +7,7 @@ class Provider::Anthropic::PurchaseExtractor
   TOOL_NAME = "report_purchase".freeze
   OPERATION = "extract_purchase".freeze
   # Recorded with each purchase, so results can be compared after the prompt changes.
-  PROMPT_VERSION = "2026-11-17".freeze
+  PROMPT_VERSION = "2026-11-17.2".freeze
   PAYMENT_METHODS = %w[card blik transfer cash_on_delivery installments other unknown].freeze
   MAX_TOKENS = 8192
 
@@ -125,7 +125,12 @@ class Provider::Anthropic::PurchaseExtractor
             message's date (Original-Date), never the date it was forwarded (Received-Date).
           - total is the amount charged for the whole order or payment: all sellers and delivery
             included (Polish: "Do zapłaty", "Razem", "Suma"). Delivery cost ("Dostawa") also goes in
-            shipping_cost; order-level discounts in discount_total as a positive number.
+            shipping_cost.
+          - Item amounts are what was paid for each line, after any discount shown on that line.
+          - discount_total is only a discount taken off the order as a whole that is not already in
+            the item amounts or shipping_cost, so that items + shipping_cost - discount_total = total.
+            Free delivery (Smart!, a bundle "z pakietem", a free-delivery threshold) is shipping_cost
+            0 and no discount; a struck-through original price or "Oszczędzasz" is not a discount.
           - One order can list items from several marketplace sellers: return them all, with seller.
           - payment_method: "blik" for BLIK, "card" for card or Google/Apple Pay, "transfer" for bank
             transfers and pay-by-link, "cash_on_delivery" for paying on delivery ("przy odbiorze",
