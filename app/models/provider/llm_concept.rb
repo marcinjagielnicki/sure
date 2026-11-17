@@ -55,6 +55,19 @@ module Provider::LlmConcept
     false
   end
 
+  PurchaseExtraction = Data.define(
+    :is_order, :not_order_reason, :merchant, :order_number, :order_date, :currency, :total,
+    :shipping_cost, :discount_total, :payment_method, :items, :confidence, :notes
+  )
+
+  def supports_purchase_extraction?(model: nil)
+    false
+  end
+
+  def extract_purchase(text:, category_names:, model: "", family: nil)
+    raise NotImplementedError, "Provider does not support purchase extraction"
+  end
+
   def extract_receipt(files:, category_names:, model: "", family: nil)
     raise NotImplementedError, "Provider does not support receipt extraction"
   end

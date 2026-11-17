@@ -279,6 +279,36 @@ class Provider::Anthropic < Provider
     end
   end
 
+  # Order emails are text, so any model that can call a tool reads them.
+  def supports_purchase_extraction?(model: @default_model)
+    supports_model?(model.presence || @default_model)
+  end
+
+  def extract_purchase(text:, category_names:, model: "", family: nil)
+    with_provider_response do
+      effective_model = model.presence || @default_model
+      raise Error, "Model does not support purchase extraction: #{effective_model}" unless supports_purchase_extraction?(model: effective_model)
+
+      trace = create_langfuse_trace(name: "anthropic.extract_purchase", input: { chars: text.to_s.length })
+
+      result = PurchaseExtractor.new(
+        client,
+        model: effective_model,
+        text: text,
+        category_names: category_names,
+        langfuse_trace: trace,
+        family: family
+      ).extract
+
+      finish_langfuse_trace(trace: trace, output: result.to_h)
+
+      result
+    rescue => error
+      finish_langfuse_trace(trace: trace, output: { error: error.message }, level: "ERROR")
+      raise
+    end
+  end
+
   def extract_bank_statement(pdf_content:, model: "", family: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
