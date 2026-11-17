@@ -56,6 +56,9 @@ en:
         all: All
         to_match: "To match (%{count})"
       search_placeholder: Search shops, orders and items
+      from: From
+      to: To
+      filter: Filter
       empty:
         title: No purchases yet
         description: Forward order confirmation emails to the order mailbox, or scan a receipt, and they'll show up here.

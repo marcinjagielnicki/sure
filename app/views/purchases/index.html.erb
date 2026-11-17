@@ -6,15 +6,20 @@
 
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <%= render DS::SegmentedControl.new(aria_label: t(".tabs_label")) do |sc| %>
-      <% sc.with_segment(t(".tabs.all"), href: purchases_path(q: @query.presence), active: @tab == "all") %>
-      <% sc.with_segment(t(".tabs.to_match", count: @to_match_count), href: purchases_path(tab: "to_match", q: @query.presence), active: @tab == "to_match") %>
+      <% filters = { q: @query.presence, start_date: params[:start_date].presence, end_date: params[:end_date].presence } %>
+      <% sc.with_segment(t(".tabs.all"), href: purchases_path(**filters.compact), active: @tab == "all") %>
+      <% sc.with_segment(t(".tabs.to_match", count: @to_match_count), href: purchases_path(tab: "to_match", **filters.compact), active: @tab == "to_match") %>
     <% end %>
 
-    <%= form_with url: purchases_path, method: :get, class: "sm:w-72" do %>
-      <%= hidden_field_tag :tab, @tab if @tab == "to_match" %>
-      <%= render DS::SearchInput.new(name: "q", value: @query, placeholder: t(".search_placeholder")) %>
-    <% end %>
+    <%= render DS::SearchInput.new(name: "q", value: @query, placeholder: t(".search_placeholder"), form: "purchase_filters", class: "sm:w-72") %>
   </div>
+
+  <%= styled_form_with url: purchases_path, method: :get, id: "purchase_filters", class: "flex flex-wrap items-end gap-3" do |form| %>
+    <%= hidden_field_tag :tab, @tab if @tab == "to_match" %>
+    <%= form.date_field :start_date, label: t(".from"), value: params[:start_date] %>
+    <%= form.date_field :end_date, label: t(".to"), value: params[:end_date] %>
+    <%= form.submit t(".filter") %>
+  <% end %>
 
   <% if @purchases.any? %>
     <div class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">

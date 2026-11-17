@@ -110,4 +110,13 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  test "filters by order date from the page" do
+    get purchases_url(start_date: @awaiting.ordered_on.iso8601, end_date: @awaiting.ordered_on.iso8601)
+
+    assert_includes response.body, purchase_path(@awaiting)
+    refute_includes response.body, purchase_path(@matched)
+    assert_select "input[type=date][name=start_date][value='#{@awaiting.ordered_on.iso8601}']"
+    assert_select "input[type=date][name=end_date]"
+  end
 end
