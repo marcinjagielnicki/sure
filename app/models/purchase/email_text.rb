@@ -4,7 +4,9 @@
 class Purchase::EmailText
   MAX_CHARS = 40_000
 
-  Result = Data.define(:text, :truncated, :input_chars)
+  # original_from_domain: the registrable domain of whoever sent the order (the shop), read from
+  # the forwarded block, the attached message, or an automatic forward's own From.
+  Result = Data.define(:text, :truncated, :input_chars, :original_from_domain)
 
   FORWARD_MARKERS = [
     /-{3,}\s*Forwarded message\s*-{3,}/i,
@@ -19,6 +21,14 @@ class Purchase::EmailText
   }.freeze
   BLOCK_ELEMENTS = %w[p div br li tr h1 h2 h3 h4 h5 h6 table section article header footer].freeze
 
+  # "Allegro <x@powiadomienia.allegro.pl>" -> "allegro.pl"; nil when no address can be read.
+  def self.registrable_domain(address)
+    host = address.to_s[/[^\s<>"@]+@([a-z0-9.-]+\.[a-z]{2,})/i, 1]
+    PublicSuffix.domain(host.downcase) if host
+  rescue PublicSuffix::Error
+    nil
+  end
+
   def initialize(mail)
     @mail = mail
   end
@@ -29,7 +39,12 @@ class Purchase::EmailText
     headers = (inline_forward_headers(body) if message.equal?(mail)).presence || own_headers(message)
     text = [ header_block(headers), body ].reject(&:blank?).join("\n\n")
 
-    Result.new(text: text.first(MAX_CHARS), truncated: text.length > MAX_CHARS, input_chars: text.length)
+    Result.new(
+      text: text.first(MAX_CHARS),
+      truncated: text.length > MAX_CHARS,
+      input_chars: text.length,
+      original_from_domain: self.class.registrable_domain(headers["Original-From"])
+    )
   end
 
   private

@@ -24,4 +24,11 @@ namespace :purchases do
 
     puts "cleared=#{cleared}"
   end
+
+  desc "Read the shop's domain from stored order emails, for shop logos (no AI calls)"
+  task backfill_domains: :environment do
+    updated = Purchase.email.where(merchant_domain: nil).find_each.count(&:backfill_merchant_domain!)
+
+    puts "updated=#{updated}"
+  end
 end

@@ -38,6 +38,27 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     assert_includes text, "Original-From: \"Amazon.com\" <auto-confirm@amazon.com>"
   end
 
+  test "the shop's domain comes from the forwarded block, not the person who forwarded it" do
+    assert_equal "amazon.com", text_for("amazon_manual_forward.eml").original_from_domain
+  end
+
+  test "an automatically forwarded order gives its own sender's domain" do
+    assert_equal "amazon.com", text_for("amazon_auto_forward.eml").original_from_domain
+  end
+
+  test "an order forwarded as an attachment gives the attached message's sender domain" do
+    assert_equal "amazon.com", text_for("forward_as_attachment.eml").original_from_domain
+  end
+
+  test "a shop sending from a subdomain gives its registrable domain" do
+    assert_equal "allegro.pl", domain_from("Allegro <powiadomienia@powiadomienia.allegro.pl>")
+    assert_equal "amazon.co.uk", domain_from("x@mail.amazon.co.uk")
+  end
+
+  test "an unparseable sender gives no domain" do
+    assert_nil domain_from("Allegro")
+  end
+
   test "decodes ISO-8859-2" do
     text = text_for("iso_8859_2.eml").text
 
@@ -68,6 +89,10 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
   end
 
   private
+    def domain_from(from)
+      Purchase::EmailText.new(Mail.new(from:, subject: "Order", body: "Order total 10.00")).call.original_from_domain
+    end
+
     def text_for(name)
       Purchase::EmailText.new(Mail.new(file_fixture("purchase_emails/#{name}").binread)).call
     end

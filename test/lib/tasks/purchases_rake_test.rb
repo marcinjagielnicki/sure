@@ -2,6 +2,7 @@ require "test_helper"
 
 RakeTaskTestHelper.load_task("purchases:backfill_receipts", "purchases")
 RakeTaskTestHelper.load_task("purchases:revalidate", "purchases")
+RakeTaskTestHelper.load_task("purchases:backfill_domains", "purchases")
 
 class PurchasesRakeTest < ActiveSupport::TestCase
   include EntriesTestHelper
@@ -55,5 +56,20 @@ class PurchasesRakeTest < ActiveSupport::TestCase
     assert_empty purchase.reload.review_reasons
     assert_empty purchase.ai_metadata["validation"]
     assert_equal [ "items_mismatch" ], still_wrong.reload.review_reasons.map { _1["reason"] }
+  end
+
+  test "backfill_domains reads the shop's domain from stored emails and skips receipts" do
+    email = create_email_purchase
+    email.update!(status: :awaiting_payment)
+    Purchase::FromReceiptScan.sync!(@scan, extraction_hash: build_receipt_extraction.to_h.as_json, ai_metadata: {})
+    receipt = @scan.reload.purchase
+    RakeTaskTestHelper.prepare("purchases:backfill_domains")
+    Provider::Registry.expects(:preferred_llm_provider).never
+
+    out, = capture_io { Rake::Task["purchases:backfill_domains"].invoke }
+
+    assert_match "updated=1", out
+    assert_equal "amazon.com", email.reload.merchant_domain
+    assert_nil receipt.reload.merchant_domain
   end
 end
