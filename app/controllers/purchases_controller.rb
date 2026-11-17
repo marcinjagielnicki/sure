@@ -37,7 +37,8 @@ class PurchasesController < ApplicationController
   end
 
   def original_email
-    raise ActiveRecord::RecordNotFound unless @purchase.email? && @purchase.original_email.attached?
+    # The email may hold a delivery address or phone number, so only its sender gets it.
+    raise ActiveRecord::RecordNotFound unless @purchase.user_id == Current.user.id && @purchase.email? && @purchase.original_email.attached?
 
     send_data @purchase.original_email.download, filename: "order.eml", type: "message/rfc822", disposition: "attachment"
   end
@@ -51,12 +52,8 @@ class PurchasesController < ApplicationController
       @purchase = visible_purchases.find(params[:id])
     end
 
-    # The purchase's own user, or anyone who may change the linked transaction.
     def ensure_can_change
-      return if @purchase.user_id == Current.user.id
-      return if @purchase.linked_transaction && Current.annotatable_entries.exists?(id: @purchase.linked_transaction.entry.id)
-
-      redirect_to purchase_path(@purchase), alert: t("purchases.not_authorized")
+      redirect_to purchase_path(@purchase), alert: t("purchases.not_authorized") unless @purchase.changeable_by?(Current.user)
     end
 
     def search(scope)

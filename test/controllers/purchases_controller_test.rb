@@ -99,4 +99,15 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     refute_includes response.body, "<script>alert(1)</script>"
     assert_includes response.body, "&lt;script&gt;"
   end
+
+  test "only the purchase's owner can download the original email" do
+    @matched.original_email.attach(io: StringIO.new("From: a@b.c\r\n\r\nhome address"), filename: "order.eml", content_type: "message/rfc822")
+    member = users(:family_member)
+    member.update!(preferences: member.preferences.merge("preview_features_enabled" => true))
+    sign_in member
+
+    get original_email_purchase_url(@matched)
+
+    assert_response :not_found
+  end
 end

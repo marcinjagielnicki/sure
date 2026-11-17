@@ -5,6 +5,7 @@ class PurchaseLinksController < ApplicationController
 
   before_action :require_preview_features!
   before_action :set_purchase
+  before_action :ensure_can_change
 
   def new
     @query = params[:q].to_s.strip
@@ -29,6 +30,10 @@ class PurchaseLinksController < ApplicationController
   private
     def set_purchase
       @purchase = Purchase.visible_to(Current.user).where(family: Current.family).find(params[:purchase_id])
+    end
+
+    def ensure_can_change
+      redirect_to purchase_path(@purchase), alert: t("purchases.not_authorized") unless @purchase.changeable_by?(Current.user)
     end
 
     def transaction_entries
