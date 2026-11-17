@@ -19,6 +19,8 @@ class Purchase < ApplicationRecord
 
   has_many :items, -> { order(:position) }, class_name: "PurchaseItem", dependent: :destroy, inverse_of: :purchase
   has_one_attached :original_email
+  # The receipt or invoice files of an emailed purchase; they also go onto its linked transaction.
+  has_many_attached :receipt_files
 
   enum :source, { email: "email", receipt: "receipt" }, validate: true
   enum :status, {

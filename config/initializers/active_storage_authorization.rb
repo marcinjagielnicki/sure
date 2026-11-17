@@ -73,12 +73,17 @@ Rails.application.config.to_prepare do
         false
       end
 
-      # A forwarded order email may hold a delivery address; mirrors PurchasesController#original_email.
+      # A forwarded order email may hold a delivery address, so only its owner gets it (mirrors
+      # PurchasesController#original_email). Receipt files also sit on the linked transaction, so
+      # whoever the transaction's account is shared with may see them too.
       def purchase_attachment_authorized?(attachment)
         purchase = attachment.record
-        return false if purchase.nil?
+        return false if purchase.nil? || purchase.family_id != Current.family&.id
+        return true if purchase.user_id == Current.user&.id
+        return false unless attachment.name == "receipt_files"
 
-        purchase.family_id == Current.family&.id && purchase.user_id == Current.user&.id
+        account = purchase.linked_transaction&.entry&.account
+        account.present? && account.shared_with?(Current.user)
       rescue ActiveRecord::RecordNotFound, NoMethodError
         false
       end

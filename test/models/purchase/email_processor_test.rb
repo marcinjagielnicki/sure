@@ -72,6 +72,34 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_nil purchase.merchant_domain
   end
 
+  test "attachments go to the model with the text and only the receipt is kept" do
+    attach_email_with_files
+    provider = stub_purchase_provider(build_purchase_extraction(receipt_files: [ 1 ]))
+    provider.expects(:extract_purchase).with { |**args| args[:files].map { _1[:filename] } == [ "receipt.jpg", "terms.pdf" ] }
+            .returns(Provider::Response.new(success?: true, data: build_purchase_extraction(receipt_files: [ 1 ]), error: nil))
+
+    process
+
+    @purchase.reload
+    assert_equal [ "receipt.jpg" ], @purchase.receipt_files.map { _1.filename.to_s }
+    assert_equal [ [ "receipt.jpg", "image/jpeg", true ], [ "terms.pdf", "application/pdf", false ] ],
+                 @purchase.ai_metadata["files"].map { [ _1["filename"], _1["content_type"], _1["receipt"] ] }
+    assert @purchase.ai_metadata["files"].all? { _1["bytes"].positive? }
+  end
+
+  test "a purchase paid in cash isn't matched to a bank payment" do
+    payment(date: @ordered_on)
+    stub_purchase_provider(build_purchase_extraction(payment_method: "cash"))
+
+    process
+    Purchase::MatchPendingJob.perform_now
+
+    @purchase.reload
+    assert_equal "unmatched", @purchase.status
+    assert_nil @purchase.linked_transaction
+    assert_nil @purchase.match_deadline_on
+  end
+
   test "no candidate leaves it awaiting payment with a deadline" do
     stub_purchase_provider
 
@@ -212,6 +240,13 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
   private
     def process
       Purchase::EmailProcessor.new(@purchase).process!
+    end
+
+    def attach_email_with_files
+      mail = Mail.new(from: "Bob Dylan <bob@bobdylan.com>", subject: "Receipt", body: "My receipt")
+      mail.add_file(filename: "receipt.png", content: Vips::Image.gaussnoise(300, 300).cast(:uchar).pngsave_buffer)
+      mail.add_file(filename: "terms.pdf", content: "%PDF-1.4\n" + ("x" * 25_000))
+      @purchase.original_email.attach(io: StringIO.new(mail.to_s), filename: "order.eml", content_type: "message/rfc822")
     end
 
     def payment(date:, amount: BigDecimal("249.99"))

@@ -27,8 +27,9 @@ class Purchase::Matcher
   private
     attr_reader :purchase
 
+    # Cash and instalment purchases have no single bank payment of their total to find.
     def skip?
-      purchase.paid_by_installments? ||
+      purchase.paid_by_installments? || purchase.paid_by_cash? ||
         purchase.total.nil? || !purchase.total.positive? ||
         purchase.ordered_on.nil? || purchase.currency.blank? ||
         (purchase.review_reasons.map { _1["reason"] } & BLOCKING_REASONS).any?

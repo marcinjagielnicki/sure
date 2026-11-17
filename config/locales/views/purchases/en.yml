@@ -60,6 +60,7 @@ en:
       not_an_order: The email isn't an order confirmation.
       duplicate: This order was already added from another email.
       already_linked: Its transaction already belongs to another purchase, so this one isn't linked.
+      too_many_attachments: The linked transaction has no room for more attachments, so the receipt stays on this purchase only.
     ai_metadata:
       title: What the AI read
       summary: "Model %{model}, prompt version %{version}."
