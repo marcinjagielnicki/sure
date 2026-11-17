@@ -122,3 +122,10 @@ poll_purchase_inbox:
   active_job: true
   queue: "scheduled"
   description: "Reads forwarded order emails from the order mailbox (no-op unless configured)"
+
+match_pending_purchases:
+  cron: "*/30 * * * *"
+  class: "Purchase::MatchPendingJob"
+  active_job: true
+  queue: "scheduled"
+  description: "Links forwarded orders to payments that arrived since, and flags overdue ones"
