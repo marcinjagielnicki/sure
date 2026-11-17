@@ -1,0 +1,184 @@
+require "test_helper"
+
+class Purchase::EmailProcessorTest < ActiveSupport::TestCase
+  include EntriesTestHelper
+  include ActionMailer::TestHelper
+
+  setup do
+    @ordered_on = Date.current - 2.days
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_purchase))
+    @purchase = create_email_purchase
+  end
+
+  test "an order matching one bank transaction is linked and the user is emailed" do
+    entry = payment(date: @ordered_on + 1.day)
+    stub_purchase_provider
+
+    assert_enqueued_email_with PurchaseMailer, :processed, params: { purchase: @purchase } do
+      process
+    end
+
+    @purchase.reload
+    assert_equal "matched", @purchase.status
+    assert_equal entry.entryable, @purchase.linked_transaction
+    assert_equal "Amazon.com", @purchase.merchant
+    assert_equal "112-1234567-1234567", @purchase.order_number
+    assert_equal BigDecimal("20.00"), @purchase.shipping_cost
+    assert_equal [ "HEPA filter", "Travel mug" ], @purchase.items.map(&:name)
+    assert_equal categories(:food_and_drink), @purchase.items.first.category
+    assert_equal BigDecimal("79.98"), @purchase.items.first.amount
+  end
+
+  # The order date comes from the email, not from when it was forwarded.
+  test "the window starts at the order date even when forwarded ten days later" do
+    travel_to Date.current + 10.days do
+      entry = payment(date: @ordered_on + 1.day)
+      stub_purchase_provider(build_purchase_extraction(order_date: @ordered_on))
+
+      process
+
+      assert_equal entry.entryable, @purchase.reload.linked_transaction
+    end
+  end
+
+  test "an order from several sellers becomes one purchase with sellers on its items" do
+    stub_purchase_provider
+
+    process
+
+    assert_equal [ "HomeParts LLC", "Amazon.com" ], @purchase.reload.items.map(&:seller)
+    assert_equal BigDecimal("249.99"), @purchase.total
+  end
+
+  test "no candidate leaves it awaiting payment with a deadline" do
+    stub_purchase_provider
+
+    process
+
+    @purchase.reload
+    assert_equal "awaiting_payment", @purchase.status
+    assert_equal @ordered_on + Purchase::DEADLINE_DAYS, @purchase.match_deadline_on
+  end
+
+  test "installments go straight to unmatched" do
+    payment(date: @ordered_on)
+    stub_purchase_provider(build_purchase_extraction(payment_method: "installments"))
+
+    process
+
+    assert_equal "unmatched", @purchase.reload.status
+    assert_nil @purchase.transaction_id
+  end
+
+  test "not an order is rejected and the user told why" do
+    stub_purchase_provider(build_purchase_extraction(is_order: false, not_order_reason: "Shipping notification"))
+
+    assert_enqueued_email_with PurchaseMailer, :rejected, params: { purchase: @purchase } do
+      process
+    end
+
+    @purchase.reload
+    assert_equal "rejected", @purchase.status
+    assert_equal [ "not_an_order" ], @purchase.review_reasons.map { _1["reason"] }
+    assert_equal "Fwd: Your Amazon.com order #112-1234567-1234567", @purchase.ai_metadata["subject"]
+  end
+
+  test "a second email for the same order number is rejected as a duplicate" do
+    existing = Purchase.create!(family: @purchase.family, user: @purchase.user, source: :email, status: :awaiting_payment,
+                                merchant: "AMAZON.COM", order_number: "112-1234567-1234567")
+    stub_purchase_provider
+
+    assert_enqueued_email_with PurchaseMailer, :rejected, params: { purchase: @purchase } do
+      process
+    end
+
+    @purchase.reload
+    assert_equal "rejected", @purchase.status
+    assert_equal({ "reason" => "duplicate", "purchase_id" => existing.id }, @purchase.review_reasons.last)
+  end
+
+  test "validation problems are flagged and stored but the purchase is kept" do
+    stub_purchase_provider(build_purchase_extraction(total: BigDecimal("300.00")))
+
+    process
+
+    @purchase.reload
+    assert_equal "awaiting_payment", @purchase.status
+    assert_includes @purchase.review_reasons.map { _1["reason"] }, "items_mismatch"
+    assert_equal [ "items_mismatch" ], @purchase.ai_metadata["validation"].map { _1["reason"] }
+  end
+
+  test "ai_metadata stores the raw output, model, prompt version and input size" do
+    stub_purchase_provider
+
+    process
+
+    metadata = @purchase.reload.ai_metadata
+    assert_equal "claude-test", metadata["model"]
+    assert_equal Provider::Anthropic::PurchaseExtractor::PROMPT_VERSION, metadata["prompt_version"]
+    assert_equal "Amazon.com", metadata.dig("raw_output", "merchant")
+    assert_operator metadata["input_chars"], :>, 100
+    assert_equal false, metadata["truncated"]
+    assert metadata["extracted_at"].present?
+  end
+
+  test "a provider error fails the purchase, logs it and emails the user" do
+    stub_purchase_provider(success: false, error: Provider::Error.new("boom"))
+
+    assert_difference -> { DebugLogEntry.where(source: "Purchase::EmailProcessor").count }, 1 do
+      assert_enqueued_email_with PurchaseMailer, :failed, params: { purchase: @purchase } do
+        process
+      end
+    end
+
+    @purchase.reload
+    assert_equal "failed", @purchase.status
+    assert_equal "boom", @purchase.error
+  end
+
+  test "AI unavailable fails without calling the provider" do
+    Ai.stubs(:availability).returns(Ai::Availability.unavailable(:extract_purchase, :not_configured))
+    provider = stub_purchase_provider
+    provider.expects(:extract_purchase).never
+
+    process
+
+    assert_equal "failed", @purchase.reload.status
+  end
+
+  test "processing twice does nothing the second time" do
+    provider = stub_purchase_provider
+    process
+
+    provider.expects(:extract_purchase).never
+    process
+  end
+
+  test "reprocess! restarts a failed purchase" do
+    @purchase.update!(status: :failed, error: "boom")
+
+    assert_enqueued_with(job: Purchase::EmailProcessJob, args: [ @purchase ]) do
+      @purchase.reprocess!
+    end
+
+    assert_equal "processing", @purchase.reload.status
+    assert_nil @purchase.error
+  end
+
+  test "the job processes the purchase" do
+    stub_purchase_provider
+
+    Purchase::EmailProcessJob.perform_now(@purchase)
+
+    assert_equal "awaiting_payment", @purchase.reload.status
+  end
+
+  private
+    def process
+      Purchase::EmailProcessor.new(@purchase).process!
+    end
+
+    def payment(date:, amount: BigDecimal("249.99"))
+      create_transaction(account: accounts(:depository), date:, amount:, currency: "USD", name: "AMAZON MKTP")
+    end
+end
