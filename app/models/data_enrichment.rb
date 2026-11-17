@@ -16,6 +16,7 @@ class DataEnrichment < ApplicationRecord
     mercury: "mercury",
     monobank: "monobank",
     plaid: "plaid",
+    purchase: "purchase",
     questrade: "questrade",
     redbark: "redbark",
     rule: "rule",
