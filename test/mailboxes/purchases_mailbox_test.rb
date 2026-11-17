@@ -1,0 +1,81 @@
+require "test_helper"
+
+class PurchasesMailboxTest < ActionMailbox::TestCase
+  include ActionMailer::TestHelper
+
+  setup do
+    @user = users(:family_admin)
+    @user.update!(preferences: @user.preferences.merge("preview_features_enabled" => true))
+    PurchaseInbox.stubs(:config).returns(PurchaseInbox::Config.new(
+      enabled: true, host: "imap.example.com", port: 993, ssl: true, username: "orders@example.com",
+      password: "secret", folder: "INBOX", processed_folder: "Sure/Processed", shop_domains: [ "amazon.com" ],
+      authserv_id: "mx.google.com", require_sender_auth: true
+    ))
+  end
+
+  test "a routed, authenticated email creates a processing purchase and starts reading it" do
+    purchase = nil
+    assert_enqueued_with(job: Purchase::EmailProcessJob) do
+      inbound = receive_inbound_email_from_source(fixture("amazon_manual_forward.eml"))
+      assert inbound.delivered?
+      purchase = Purchase.order(:created_at).last
+    end
+
+    assert_equal "processing", purchase.status
+    assert_equal "email", purchase.source
+    assert_equal @user, purchase.user
+    assert_equal @user.family, purchase.family
+    assert purchase.original_email.attached?
+    assert_equal "message/rfc822", purchase.original_email.content_type
+    assert_includes purchase.original_email.download, "Order Total: $249.99"
+  end
+
+  test "an automatically forwarded order to a plus address is accepted" do
+    assert_difference -> { Purchase.count }, 1 do
+      receive_inbound_email_from_source(fixture("amazon_auto_forward.eml"))
+    end
+  end
+
+  test "an unknown sender is bounced silently and logged" do
+    raw = fixture("amazon_manual_forward.eml").sub("From: Bob Dylan <bob@bobdylan.com>", "From: someone@example.com")
+
+    assert_no_enqueued_emails do
+      assert_no_difference -> { Purchase.count } do
+        inbound = receive_inbound_email_from_source(raw)
+        assert inbound.bounced?
+      end
+    end
+
+    entry = DebugLogEntry.where(source: "PurchasesMailbox").last
+    assert_equal "unknown_sender", entry.metadata["reason"]
+    assert_equal "someone@example.com", entry.metadata["from"]
+    assert_equal "Fwd: Your Amazon.com order #112-1234567-1234567", entry.metadata["subject"]
+  end
+
+  test "failed authentication bounces and logs the reason" do
+    raw = fixture("amazon_manual_forward.eml").gsub("dmarc=pass", "dmarc=fail").gsub("dkim=pass", "dkim=fail")
+
+    inbound = receive_inbound_email_from_source(raw)
+
+    assert inbound.bounced?
+    assert_equal "sender_not_authenticated", DebugLogEntry.where(source: "PurchasesMailbox").last.metadata["reason"]
+  end
+
+  test "a user without preview features gets one notice a day and nothing is created" do
+    @user.update!(preferences: @user.preferences.merge("preview_features_enabled" => false))
+
+    assert_no_difference -> { Purchase.count } do
+      assert_enqueued_email_with PurchaseMailer, :preview_required, params: { user: @user } do
+        assert receive_inbound_email_from_source(fixture("amazon_manual_forward.eml")).bounced?
+      end
+      assert_no_enqueued_emails do
+        receive_inbound_email_from_source(fixture("amazon_manual_forward.eml").sub(/Message-ID: <[^>]+>/, "Message-ID: <second@fixture.example>"))
+      end
+    end
+  end
+
+  private
+    def fixture(name)
+      file_fixture("purchase_emails/#{name}").read
+    end
+end
