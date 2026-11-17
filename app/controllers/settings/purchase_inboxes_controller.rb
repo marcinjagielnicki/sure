@@ -4,8 +4,8 @@ class Settings::PurchaseInboxesController < ApplicationController
 
   guard_feature unless: -> { self_hosted? }
   before_action :require_preview_features!
-  before_action :ensure_admin
-  before_action :ensure_instance_settings_manager, only: %i[update test_connection]
+  # The mailbox serves the whole instance: its settings and rejected emails span every family.
+  before_action :ensure_instance_settings_manager
 
   RECENT_REJECTIONS = 20
 
@@ -68,13 +68,9 @@ class Settings::PurchaseInboxesController < ApplicationController
       Current.user.super_admin? ? User.all : Current.family.users
     end
 
-    def ensure_admin
-      redirect_to settings_profile_path, alert: t("settings.purchase_inboxes.not_authorized") unless Current.user.admin?
-    end
-
     def ensure_instance_settings_manager
-      return if Current.user.manages_instance_settings?
+      return if Current.user.admin? && Current.user.manages_instance_settings?
 
-      redirect_to settings_purchase_inbox_path, alert: t("settings.purchase_inboxes.not_authorized")
+      redirect_to settings_profile_path, alert: t("settings.purchase_inboxes.not_authorized")
     end
 end

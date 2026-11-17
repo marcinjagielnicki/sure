@@ -40,6 +40,6 @@ class Settings::PurchaseInboxRoutesController < ApplicationController
     def ensure_instance_settings_manager
       return if Current.user.admin? && Current.user.manages_instance_settings?
 
-      redirect_to settings_purchase_inbox_path, alert: t("settings.purchase_inboxes.not_authorized")
+      redirect_to settings_profile_path, alert: t("settings.purchase_inboxes.not_authorized")
     end
 end
