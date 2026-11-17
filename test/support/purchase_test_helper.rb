@@ -18,7 +18,8 @@ module PurchaseTestHelper
         { "name" => "Travel mug", "quantity" => "1", "unit_price" => "150.01", "amount" => "150.01", "category_name" => nil, "seller" => "Amazon.com" }
       ],
       confidence: {},
-      notes: nil
+      notes: nil,
+      receipt_files: []
     }.merge(overrides))
   end
 

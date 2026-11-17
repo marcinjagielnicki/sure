@@ -36,6 +36,7 @@ class Purchase < ApplicationRecord
     blik: "blik",
     transfer: "transfer",
     cash_on_delivery: "cash_on_delivery",
+    cash: "cash",
     installments: "installments",
     other: "other",
     unknown: "unknown"

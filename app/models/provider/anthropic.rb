@@ -284,17 +284,18 @@ class Provider::Anthropic < Provider
     supports_model?(model.presence || @default_model)
   end
 
-  def extract_purchase(text:, category_names:, model: "", family: nil)
+  def extract_purchase(text:, category_names:, files: [], model: "", family: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
       raise Error, "Model does not support purchase extraction: #{effective_model}" unless supports_purchase_extraction?(model: effective_model)
 
-      trace = create_langfuse_trace(name: "anthropic.extract_purchase", input: { chars: text.to_s.length })
+      trace = create_langfuse_trace(name: "anthropic.extract_purchase", input: { chars: text.to_s.length, files: Array(files).size })
 
       result = PurchaseExtractor.new(
         client,
         model: effective_model,
         text: text,
+        files: Array(files),
         category_names: category_names,
         langfuse_trace: trace,
         family: family
