@@ -18,14 +18,14 @@ class Settings::PurchaseInboxesController < ApplicationController
 
   def update
     save_connection_settings
-    if setting_params.key?(:enabled)
-      enable = setting_params[:enabled] == "1"
-      if enable && !PurchaseInbox.configured?(PurchaseInbox.config.with(enabled: true))
-        Setting.purchase_inbox_enabled = false
-        return redirect_to settings_purchase_inbox_path, alert: t(".incomplete")
-      end
-      Setting.purchase_inbox_enabled = enable
+    enable = setting_params.key?(:enabled) ? setting_params[:enabled] == "1" : Setting.purchase_inbox_enabled
+    # Checked on every save, so clearing a required field doesn't leave a mailbox that looks on
+    # but is never read.
+    if enable && !PurchaseInbox.configured?(PurchaseInbox.config.with(enabled: true))
+      Setting.purchase_inbox_enabled = false
+      return redirect_to settings_purchase_inbox_path, alert: t(".incomplete")
     end
+    Setting.purchase_inbox_enabled = enable
 
     redirect_to settings_purchase_inbox_path, notice: t(".saved")
   end
