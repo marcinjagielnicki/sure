@@ -1,0 +1,19 @@
+<%# locals: (purchase:) %>
+<%= link_to purchase_path(purchase), class: "flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface-hover" do %>
+  <span class="min-w-0 space-y-1">
+    <span class="block text-sm text-primary truncate">
+      <%= purchase.merchant.presence || t("purchases.unknown_merchant") %>
+      <% if purchase.items.any? %>
+        <span class="text-secondary">&middot; <%= purchase.items.first.name %><% if purchase.items.size > 1 %> <%= t("purchases.more_items", count: purchase.items.size - 1) %><% end %></span>
+      <% end %>
+    </span>
+    <span class="flex items-center gap-2 text-xs text-secondary">
+      <span><%= purchase.ordered_on ? l(purchase.ordered_on, format: :short_with_year) : "—" %></span>
+      <span>&middot; <%= t("purchases.sources.#{purchase.source}") %></span>
+      <%= render "purchases/status_badge", purchase: purchase %>
+    </span>
+  </span>
+  <span class="text-sm text-primary privacy-sensitive shrink-0">
+    <%= purchase.total ? format_money(Money.new(purchase.total, purchase.currency.presence || Current.family.currency)) : "—" %>
+  </span>
+<% end %>

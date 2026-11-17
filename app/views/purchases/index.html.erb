@@ -1,0 +1,31 @@
+<%= content_for :page_title, t(".title") %>
+<div class="space-y-4 pb-6 lg:pb-12">
+  <header class="flex justify-between items-center gap-2">
+    <h1 class="text-xl font-medium text-primary"><%= t(".title") %></h1>
+  </header>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <%= render DS::SegmentedControl.new(aria_label: t(".tabs_label")) do |sc| %>
+      <% sc.with_segment(t(".tabs.all"), href: purchases_path(q: @query.presence), active: @tab == "all") %>
+      <% sc.with_segment(t(".tabs.to_match", count: @to_match_count), href: purchases_path(tab: "to_match", q: @query.presence), active: @tab == "to_match") %>
+    <% end %>
+
+    <%= form_with url: purchases_path, method: :get, class: "sm:w-72" do %>
+      <%= hidden_field_tag :tab, @tab if @tab == "to_match" %>
+      <%= render DS::SearchInput.new(name: "q", value: @query, placeholder: t(".search_placeholder")) %>
+    <% end %>
+  </div>
+
+  <% if @purchases.any? %>
+    <div class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">
+      <% @purchases.each do |purchase| %>
+        <%= render "purchases/purchase_row", purchase: purchase %>
+      <% end %>
+    </div>
+    <%= render "shared/pagination", pagy: @pagy %>
+  <% else %>
+    <div class="bg-container rounded-xl shadow-border-xs p-4">
+      <%= render DS::EmptyState.new(icon: "shopping-bag", title: t(".empty.title"), description: t(".empty.description")) %>
+    </div>
+  <% end %>
+</div>
