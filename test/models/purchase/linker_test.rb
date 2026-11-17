@@ -45,6 +45,40 @@ class Purchase::LinkerTest < ActiveSupport::TestCase
     assert_not @entry.split_parent?
   end
 
+  test "a category the AI categorizer set and locked is replaced" do
+    @purchase.items.where(name: "Soap").update_all(category_id: @food.id)
+    @entry.entryable.enrich_attribute(:category_id, @shopping.id, source: "ai")
+    @entry.entryable.lock_attr!(:category_id)
+
+    @purchase.link!(@entry)
+
+    assert_equal @food, @entry.reload.entryable.category
+  end
+
+  test "a category the user changed after the AI set it is left alone" do
+    @entry.entryable.enrich_attribute(:category_id, @food.id, source: "ai")
+    @entry.entryable.lock_attr!(:category_id)
+    @entry.entryable.update!(category: @shopping)
+    @entry.entryable.lock_attr!(:category_id)
+
+    @purchase.link!(@entry)
+
+    assert_equal @shopping, @entry.reload.entryable.category
+    assert_not @entry.split_parent?
+  end
+
+  test "a category set from an earlier link can be set again after unlinking" do
+    @purchase.items.where(name: "Soap").update_all(category_id: @food.id)
+    @purchase.link!(@entry)
+    @purchase.unlink!
+    @purchase.update!(rejected_entry_ids: [])
+    @purchase.items.update_all(category_id: @household.id)
+
+    @purchase.link!(@entry.reload, manual: true)
+
+    assert_equal @household, @entry.reload.entryable.category
+  end
+
   test "a category the user set is left alone" do
     @entry.entryable.update!(category: @shopping)
     @entry.entryable.lock_attr!(:category_id)

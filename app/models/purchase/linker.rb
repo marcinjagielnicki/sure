@@ -1,6 +1,7 @@
 # Links a purchase to the transaction that paid for it and classifies that transaction by what
-# was bought: one category is set and locked, several split the transaction. A transaction the
-# user already split or categorized by hand is linked without being changed.
+# was bought: one category is set and locked, several split the transaction. Categories set by
+# rules, AI or other automatic sources are replaced; a transaction the user already split or
+# categorized by hand is linked without being changed.
 class Purchase::Linker
   def initialize(purchase)
     @purchase = purchase
@@ -75,17 +76,28 @@ class Purchase::Linker
 
     def categorize(entry)
       transaction = entry.entryable
-      return if entry.split_parent? || entry.split_child? || transaction.locked?(:category_id)
+      return if entry.split_parent? || entry.split_child? || category_owned_by_user?(transaction)
 
       groups = Purchase::CategoryAllocator.new(total: purchase.total, items: allocator_items, categories: purchase.family.categories).groups
       if groups.one?
         category = groups.first[:category]
         return unless category
 
-        transaction.update!(category:)
+        transaction.enrich_attribute(:category_id, category.id, source: "purchase", ignore_locks: true)
         transaction.lock_attr!(:category_id)
       elsif groups.many?
         entry.split_once!(groups.map { |group| split_for(group) }, lock_attributes: true)
+      end
+    end
+
+    # A locked category is the user's unless an automatic source (AI, a rule, Bayes, an earlier
+    # purchase link) set the current value and the user hasn't changed it since. AI and some
+    # categorizers lock what they set, so the lock alone doesn't mean the user chose it.
+    def category_owned_by_user?(transaction)
+      return false unless transaction.locked?(:category_id)
+
+      transaction.data_enrichments.where(attribute_name: "category_id").none? do |enrichment|
+        enrichment.value.to_s == transaction.category_id.to_s && enrichment.metadata&.dig("superseded") != true
       end
     end
 
