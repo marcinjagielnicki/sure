@@ -30,6 +30,11 @@ module PurchaseInbox
       (!config.require_sender_auth || config.authserv_id.present?)
   end
 
+  # Removes the mailbox password from an error message before it is stored or shown.
+  def redact(message, password = Setting.purchase_inbox_password)
+    password.present? ? message.to_s.gsub(password, "[FILTERED]") : message.to_s
+  end
+
   def record_poll!(error: nil)
     Setting.purchase_inbox_last_polled_at = Time.current
     Setting.purchase_inbox_last_error = error
