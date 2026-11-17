@@ -59,6 +59,20 @@ class ReceiptScan::Processor
 
       scan.update!(status: :completed) if scan.processing?
       write_receipt_extra(transaction)
+      record_purchase
+    end
+
+    def record_purchase
+      metadata = {
+        "provider" => provider.class.name.demodulize.underscore,
+        "model" => provider.try(:default_model),
+        "prompt_version" => Provider::Anthropic::ReceiptExtractor::PROMPT_VERSION,
+        "extracted_at" => Time.current.iso8601,
+        "raw_output" => extraction.to_h.as_json,
+        "validation" => problems
+      }
+      scan.update!(extraction: metadata)
+      Purchase::FromReceiptScan.sync!(scan.reload, extraction_hash: metadata["raw_output"], ai_metadata: metadata)
     end
 
     def provider
