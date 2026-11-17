@@ -7,13 +7,15 @@ class PurchasesController < ApplicationController
   def index
     @tab = params[:tab] == "to_match" ? "to_match" : "all"
     @query = params[:q].to_s.strip
-    @to_match_count = visible_purchases.to_match.count
+    @summary = Purchase::Summary.new(visible_purchases, currency: Current.family.currency).call
+    @to_match_count = @summary.to_match_count
 
-    scope = visible_purchases.includes(:items, linked_transaction: { entry: :account })
+    scope = visible_purchases.includes(items: :category, linked_transaction: :merchant)
     scope = scope.to_match if @tab == "to_match"
     scope = search(scope) if @query.present?
     scope = scope.where(ordered_on: start_date..) if start_date
     scope = scope.where(ordered_on: ..end_date) if end_date
+    @month_totals = Purchase::Summary.month_totals(scope, currency: Current.family.currency)
     @pagy, @purchases = pagy(scope.order(Arel.sql("purchases.ordered_on DESC NULLS LAST"), created_at: :desc), limit: 25)
   end
 

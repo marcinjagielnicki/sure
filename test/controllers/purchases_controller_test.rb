@@ -25,6 +25,61 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, purchase_path(@matched)
   end
 
+  test "the list opens with this month's summary" do
+    travel_to Date.new(2026, 11, 17) do
+      @matched.update!(ordered_on: Date.new(2026, 11, 2), total: 42)
+      @awaiting.update!(ordered_on: Date.new(2026, 10, 1))
+
+      get purchases_url
+
+      assert_select "[data-testid=purchases-summary]" do
+        assert_select "*", text: /\$42\.00/
+        assert_select "*", text: /Allegro/
+      end
+    end
+  end
+
+  test "groups purchases by month, newest first, with undated ones last" do
+    @matched.update!(ordered_on: Date.new(2026, 11, 2))
+    @awaiting.update!(ordered_on: Date.new(2026, 10, 5))
+    Purchase.create!(family: @user.family, user: @user, source: :email, status: :failed)
+
+    get purchases_url
+
+    headers = css_select("[data-testid=purchase-month]").map { _1.text.squish }
+    assert_equal 3, headers.size
+    assert_match "November 2026", headers[0]
+    assert_match "October 2026", headers[1]
+    assert_match "No date", headers[2]
+  end
+
+  test "a row leads with what was bought and how many more items" do
+    @matched.items.create!(name: "Milk", amount: 0, position: 1)
+
+    get purchases_url
+
+    assert_select "a[href='#{purchase_path(@matched)}']", text: /Coffee beans\s*\+1/
+  end
+
+  test "a shop with a known domain shows its Brandfetch logo" do
+    Setting.stubs(:brand_fetch_client_id).returns("test-client")
+    @awaiting.update!(merchant_domain: "allegro.pl")
+
+    get purchases_url
+
+    assert_select "a[href='#{purchase_path(@awaiting)}'] img[src^='https://cdn.brandfetch.io/allegro.pl/icon']"
+  end
+
+  test "without Brandfetch a shop gets its initial instead of a broken image" do
+    Setting.stubs(:brand_fetch_client_id).returns(nil)
+    @awaiting.update!(merchant_domain: "allegro.pl")
+
+    get purchases_url
+
+    assert_select "a[href='#{purchase_path(@awaiting)}'] img", count: 0
+    assert_select "a[href='#{purchase_path(@awaiting)}']", text: /A/
+  end
+
   test "the to-match tab lists only purchases waiting for a payment" do
     get purchases_url(tab: "to_match")
 

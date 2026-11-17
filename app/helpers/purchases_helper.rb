@@ -12,4 +12,10 @@ module PurchasesHelper
       t("purchases.review_reasons.#{key}", default: key.humanize)
     end
   end
+
+  # The shop's logo: Brandfetch by the shop's domain, else the linked transaction's merchant logo.
+  def purchase_logo_url(purchase)
+    Setting.brand_fetch_icon_url(purchase.merchant_domain) ||
+      purchase.linked_transaction&.merchant&.logo_url.presence&.then { Setting.transform_brand_fetch_url(_1) }
+  end
 end

@@ -4,6 +4,8 @@
     <h1 class="text-xl font-medium text-primary"><%= t(".title") %></h1>
   </header>
 
+  <%= render "purchases/summary", summary: @summary %>
+
   <% filters = { q: @query.presence, start_date: params[:start_date].presence, end_date: params[:end_date].presence }.compact %>
   <% date_input_classes = "h-10 min-w-0 flex-1 sm:flex-none sm:w-40 rounded-md border border-secondary bg-container px-3 text-base sm:text-sm text-primary focus-ring" %>
   <%# Everything wraps to the width of the content column, not the window: with the side panels
@@ -32,9 +34,9 @@
   </div>
 
   <% if @purchases.any? %>
-    <div class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">
-      <% @purchases.each do |purchase| %>
-        <%= render "purchases/purchase_row", purchase: purchase %>
+    <div class="space-y-4">
+      <% @purchases.group_by { _1.ordered_on&.beginning_of_month }.each do |month, purchases| %>
+        <%= render "purchases/month_group", month: month, purchases: purchases, totals: @month_totals.fetch(month, []) %>
       <% end %>
     </div>
     <%= render "shared/pagination", pagy: @pagy %>
