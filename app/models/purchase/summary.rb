@@ -7,14 +7,31 @@ class Purchase::Summary
   Result = Data.define(:spent, :other_spent, :purchases_count, :items_count, :to_match_count, :top_merchant, :top_merchant_count)
 
   # @return [Hash{Date, nil => Array<Money>}] totals per month (nil for undated orders), the
-  #   family's currency first
+  #   family's currency first. An order with no currency is counted in the family's; one in a
+  #   currency Money doesn't know is left out rather than breaking the page.
   def self.month_totals(scope, currency:)
-    scope.unscope(:order, :includes).where.not(status: NOT_SPENDING).where.not(total: nil)
+    sums = scope.unscope(:order, :includes).where.not(status: NOT_SPENDING).where.not(total: nil)
       .group(Arel.sql("date_trunc('month', purchases.ordered_on)::date"), :currency)
       .sum(:total)
-      .each_with_object(Hash.new { |hash, key| hash[key] = [] }) { |((month, code), sum), totals| totals[month] << Money.new(sum, code.presence || currency) }
-      .transform_values { |amounts| amounts.sort_by { [ _1.currency.iso_code == currency ? 0 : 1, _1.currency.iso_code ] } }
+
+    sums.each_with_object({}) do |((month, code), sum), totals|
+      code = code.to_s.strip.upcase.presence || currency
+      next unless known_currency?(code)
+
+      by_code = totals[month] ||= Hash.new(0)
+      by_code[code] += sum
+    end.transform_values do |by_code|
+      by_code.sort_by { |code, _| [ code == currency ? 0 : 1, code ] }.map { |code, sum| Money.new(sum, code) }
+    end
   end
+
+  def self.known_currency?(code)
+    Money::Currency.new(code)
+    true
+  rescue Money::Currency::UnknownCurrencyError
+    false
+  end
+  private_class_method :known_currency?
 
   def initialize(scope, currency:, month: Date.current)
     @scope = scope.unscope(:order, :includes)

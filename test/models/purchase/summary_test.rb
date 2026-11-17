@@ -59,6 +59,25 @@ class Purchase::SummaryTest < ActiveSupport::TestCase
     assert_equal [ Money.new(5, "USD") ], totals[nil]
   end
 
+  test "orders without a currency or with a lowercase code count in the family's sum" do
+    purchase(ordered_on: Date.new(2026, 11, 3), total: 100)
+    purchase(ordered_on: Date.new(2026, 11, 4), total: 5, currency: nil)
+    purchase(ordered_on: Date.new(2026, 11, 5), total: 1, currency: "usd")
+
+    assert_equal Money.new(106, "USD"), call.spent
+    assert_empty call.other_spent
+    assert_equal [ Money.new(106, "USD") ], Purchase::Summary.month_totals(scope, currency: "USD")[Date.new(2026, 11, 1)]
+  end
+
+  test "an order in a currency nobody knows is left out of the totals instead of breaking them" do
+    purchase(ordered_on: Date.new(2026, 11, 3), total: 100)
+    purchase(ordered_on: Date.new(2026, 11, 4), total: 5, currency: "ZL")
+
+    assert_equal Money.new(100, "USD"), call.spent
+    assert_empty call.other_spent
+    assert_equal [ Money.new(100, "USD") ], Purchase::Summary.month_totals(scope, currency: "USD")[Date.new(2026, 11, 1)]
+  end
+
   private
     def call
       Purchase::Summary.new(scope, currency: "USD", month: @month).call
