@@ -1,7 +1,8 @@
 # Links a purchase to the transaction that paid for it and classifies that transaction by what
 # was bought: one category is set and locked, several split the transaction. Categories set by
 # rules, AI or other automatic sources are replaced; a transaction the user already split or
-# categorized by hand is linked without being changed.
+# categorized by hand is linked without being changed, until the user asks for the order's
+# categories (apply_categories!).
 class Purchase::Linker
   def initialize(purchase)
     @purchase = purchase
@@ -34,6 +35,34 @@ class Purchase::Linker
     end
   end
 
+  # True when the order's categories weren't applied only because the user had chosen the
+  # transaction's category, and applying them would change it.
+  def categories_held_back?
+    transaction = purchase.linked_transaction
+    return false unless purchase.matched? && transaction
+
+    entry = transaction.entry
+    return false if entry.split_parent? || entry.split_child? || mismatch_reason(entry) || !category_owned_by_user?(transaction)
+
+    groups = allocation
+    groups.many? || (groups.one? && groups.first[:category].present? && groups.first[:category].id != transaction.category_id)
+  end
+
+  # Applies the order's categories over the one the user chose, when they ask for it.
+  def apply_categories!(user)
+    Purchase.transaction do
+      purchase.lock!
+      transaction = purchase.linked_transaction
+      raise Purchase::LinkError, "The purchase isn't linked to a transaction" unless purchase.matched? && transaction
+
+      entry = transaction.entry
+      raise Purchase::LinkError, "The account can't be changed by this user" unless annotatable?(entry, user)
+      raise Purchase::LinkError, "The transaction doesn't match the order" if mismatch_reason(entry)
+
+      categorize(entry, override_user: true)
+    end
+  end
+
   def unlink!
     Purchase.transaction do
       purchase.lock!
@@ -62,8 +91,8 @@ class Purchase::Linker
         .update_all([ "match_candidate_entry_ids = array_remove(match_candidate_entry_ids, ?::uuid), updated_at = ?", entry.id, Time.current ])
     end
 
-    def annotatable?(entry)
-      Account.annotatable_by(purchase.user).where(id: entry.account_id, family_id: purchase.family_id).exists?
+    def annotatable?(entry, user = purchase.user)
+      Account.annotatable_by(user).where(id: entry.account_id, family_id: purchase.family_id).exists?
     end
 
     def summary
@@ -82,11 +111,12 @@ class Purchase::Linker
       end
     end
 
-    def categorize(entry)
+    def categorize(entry, override_user: false)
       transaction = entry.entryable
-      return if entry.split_parent? || entry.split_child? || category_owned_by_user?(transaction)
+      return if entry.split_parent? || entry.split_child?
+      return if !override_user && category_owned_by_user?(transaction)
 
-      groups = Purchase::CategoryAllocator.new(total: purchase.total, items: allocator_items, categories: purchase.family.categories).groups
+      groups = allocation
       if groups.one?
         category = groups.first[:category]
         return unless category
@@ -107,6 +137,10 @@ class Purchase::Linker
       transaction.data_enrichments.where(attribute_name: "category_id").none? do |enrichment|
         enrichment.value.to_s == transaction.category_id.to_s && enrichment.metadata&.dig("superseded") != true
       end
+    end
+
+    def allocation
+      Purchase::CategoryAllocator.new(total: purchase.total, items: allocator_items, categories: purchase.family.categories).groups
     end
 
     def allocator_items

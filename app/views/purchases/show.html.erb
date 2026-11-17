@@ -62,8 +62,17 @@
       <p class="text-sm text-secondary"><%= t(".no_payment.#{@purchase.status}", default: t(".no_payment.default")) %></p>
     <% end %>
 
+    <% can_change = @entry && @purchase.changeable_by?(Current.user) %>
+    <% held_back = can_change && @purchase.categories_held_back? %>
+    <% if held_back %>
+      <%= render DS::Alert.new(variant: :info, message: t(".categories_held_back")) %>
+    <% end %>
+
     <div class="flex flex-wrap gap-2">
-      <% if @entry && @purchase.changeable_by?(Current.user) %>
+      <% if held_back %>
+        <%= render DS::Button.new(text: t(".apply_categories"), href: apply_categories_purchase_path(@purchase), method: :post, variant: :primary, size: :sm, icon: "tags") %>
+      <% end %>
+      <% if can_change %>
         <%= render DS::Button.new(text: t(".unlink"), href: purchase_link_path(@purchase), method: :delete, variant: :outline, size: :sm,
                                   data: { turbo_confirm: t(".unlink_confirm") }) %>
       <% end %>

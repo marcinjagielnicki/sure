@@ -781,6 +781,7 @@ Rails.application.routes.draw do
     member do
       post :dismiss
       post :reprocess
+      post :apply_categories
       get :original_email
     end
 

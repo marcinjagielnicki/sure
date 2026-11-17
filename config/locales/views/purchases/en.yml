@@ -92,6 +92,8 @@ en:
       download_email: Download the original email
       view_receipt: View the receipt
       linked_elsewhere: Linked to a transaction on an account you can't see.
+      categories_held_back: You set this transaction's category yourself, so the order's categories weren't used.
+      apply_categories: Use the order's categories
       no_payment:
         default: No transaction is linked.
         processing: The email is still being read.
@@ -105,6 +107,8 @@ en:
       dismissed: Marked as having no payment.
     reprocess:
       reprocessing: Reading the email again.
+    apply_categories:
+      applied: The order's categories were applied to the transaction.
   purchase_links:
     new:
       title: Link a transaction
