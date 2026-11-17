@@ -1,14 +1,12 @@
 # Decides whose an incoming email is, and whether it can be trusted. A manual forward comes from
 # the user's own address (a `sender` route); an automatic forward keeps the shop's From and is
 # delivered to the mailbox's plus address (a `tag` route) from an allowed shop domain. The tag is
-# read only from the delivery headers the receiving server writes, never from To/Cc, which the
-# sender controls. When sender authentication is on, the mail server's Authentication-Results
+# read only from the topmost Delivered-To, which the receiving server prepends; lower copies and
+# To/Cc are written by the sender. When sender authentication is on, the mail server's Authentication-Results
 # must show DMARC pass for the From domain or DKIM pass aligned with it; only results written by
 # the configured mail server are trusted, since anyone can add such a header further down.
 class PurchaseInbox::SenderResolver
   Result = Data.define(:user, :route_kind, :reason)
-
-  DELIVERY_HEADERS = %w[Delivered-To X-Original-To].freeze
 
   def initialize(mail, config: PurchaseInbox.config)
     @mail = mail
@@ -41,12 +39,14 @@ class PurchaseInbox::SenderResolver
     def tag_route
       return unless shop_domain?(from_domain)
 
-      tags = delivery_addresses.filter_map { |address| tag_of(address) }
-      PurchaseInboxRoute.tag.includes(:user).find_by(value: tags) if tags.any?
+      tag = tag_of(delivered_to)
+      PurchaseInboxRoute.tag.includes(:user).find_by(value: tag) if tag
     end
 
     # The plus tag of an address on the mailbox itself, e.g. "bob" in orders+bob@example.com.
     def tag_of(address)
+      return if address.blank?
+
       local, domain = address.split("@", 2)
       mailbox_local, mailbox_domain = config.username.to_s.downcase.split("@", 2)
       base, tag = local.to_s.split("+", 2)
@@ -59,10 +59,9 @@ class PurchaseInbox::SenderResolver
       PurchaseInboxRoute.sender.includes(:user).find_by(value: from_address) if from_address.present?
     end
 
-    def delivery_addresses
-      DELIVERY_HEADERS.flat_map do |name|
-        Array(mail.header[name]).flat_map { |field| field.value.to_s.scan(/[^\s<>,;"]+@[^\s<>,;"]+/) }
-      end.map(&:downcase).uniq
+    def delivered_to
+      field = Array(mail.header["Delivered-To"]).first
+      field&.value.to_s[/[^\s<>,;"]+@[^\s<>,;"]+/]&.downcase
     end
 
     def shop_domain?(domain)

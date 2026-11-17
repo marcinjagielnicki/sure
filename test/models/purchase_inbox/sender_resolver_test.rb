@@ -108,6 +108,21 @@ class PurchaseInbox::SenderResolverTest < ActiveSupport::TestCase
     assert_equal "unknown_sender", resolve(raw).reason
   end
 
+  test "only the topmost Delivered-To counts" do
+    raw = fixture("amazon_auto_forward.eml")
+      .sub("Delivered-To: orders+bob@example.com", "Delivered-To: orders@example.com\nDelivered-To: orders+bob@example.com")
+      .sub(/^X-Forwarded-To: .*\n/, "")
+
+    assert_equal "unknown_sender", resolve(raw).reason
+  end
+
+  test "X-Original-To written by the sender doesn't route the email" do
+    raw = fixture("amazon_auto_forward.eml")
+      .sub("Delivered-To: orders+bob@example.com", "Delivered-To: orders@example.com\nX-Original-To: orders+bob@example.com")
+
+    assert_equal "unknown_sender", resolve(raw).reason
+  end
+
   test "authentication can be turned off" do
     @config = inbox_config(require_sender_auth: false)
     mail = Mail.new(fixture("amazon_manual_forward.eml"))
