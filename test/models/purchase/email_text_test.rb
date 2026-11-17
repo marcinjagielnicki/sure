@@ -96,6 +96,26 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     assert_equal 5, Purchase::EmailText.new(mail).call.files.size
   end
 
+  test "long PDFs such as terms and conditions, and PDFs that can't be opened, are not sent" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Order", body: "Order")
+    mail.add_file(filename: "terms.pdf", content: build_pdf(pages: 6))
+    mail.add_file(filename: "broken.pdf", content: "%PDF-1.4\n" + ("x" * 25_000))
+
+    assert_empty Purchase::EmailText.new(mail).call.files
+  end
+
+  test "attached files come before images embedded in the email's layout" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Order")
+    mail.html_part = Mail::Part.new(content_type: "text/html; charset=UTF-8", body: "<p>Thanks for your order</p>")
+    5.times { |index| mail.attachments.inline["product#{index}.png"] = Vips::Image.gaussnoise(300 + index, 300).cast(:uchar).pngsave_buffer }
+    mail.add_file(filename: "invoice.pdf", content: fake_pdf)
+
+    files = Purchase::EmailText.new(mail).call.files
+
+    assert_equal 5, files.size
+    assert_equal "invoice.pdf", files.first[:filename]
+  end
+
   test "files inside an order forwarded as an attachment are found" do
     inner = Mail.new(from: "shop@example.com", subject: "Your receipt", body: "Receipt attached")
     inner.add_file(filename: "receipt.pdf", content: fake_pdf)
@@ -140,7 +160,7 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     end
 
     def fake_pdf(size = 25_000)
-      "%PDF-1.4\n" + ("x" * size)
+      build_pdf(padding: size)
     end
 
     def domain_from(from)

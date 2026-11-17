@@ -20,7 +20,8 @@ class Purchase::EmailProcessor
     @email_text = Purchase::EmailText.new(mail).call
     @subject = mail.subject
 
-    response = provider.extract_purchase(text: email_text.text, files: email_text.files, category_names: family.categories.pluck(:name), family:)
+    response = extract(email_text.files)
+    response = retry_without_files(response.error) if !response.success? && email_text.files.any?
     return record_failure(response.error) unless response.success?
 
     @extraction = response.data
@@ -38,7 +39,7 @@ class Purchase::EmailProcessor
   end
 
   private
-    attr_reader :purchase, :extraction, :email_text, :subject
+    attr_reader :purchase, :extraction, :email_text, :subject, :files_rejected
 
     def family = purchase.family
 
@@ -46,6 +47,26 @@ class Purchase::EmailProcessor
       @provider ||= Provider::Registry.preferred_llm_provider.then do |candidate|
         candidate if candidate&.supports_purchase_extraction?
       end
+    end
+
+    def extract(files)
+      provider.extract_purchase(text: email_text.text, files:, category_names: family.categories.pluck(:name), family:)
+    end
+
+    # An attachment the model can't take (too many pages, a format it refuses) shouldn't cost the
+    # order: read it again from the text alone.
+    def retry_without_files(error)
+      @files_rejected = true
+      DebugLogEntry.capture(
+        category: "ai",
+        level: "warn",
+        message: "Order email attachments were rejected, reading the text only: #{error&.message}",
+        source: self.class.name,
+        family:,
+        user: purchase.user,
+        metadata: { purchase_id: purchase.id, files: email_text.files.size }
+      )
+      extract([])
     end
 
     # @return [Symbol] the email to send
@@ -158,6 +179,7 @@ class Purchase::EmailProcessor
         "validation" => problems,
         "input_chars" => email_text.input_chars,
         "truncated" => email_text.truncated,
+        "files_rejected" => files_rejected.present?,
         "files" => email_text.files.each_with_index.map do |file, index|
           { "filename" => file[:filename], "content_type" => file[:content_type], "bytes" => file[:data].bytesize,
             "receipt" => receipt_file_numbers.include?(index + 1) }

@@ -76,14 +76,18 @@ class Purchase < ApplicationRecord
     Purchase::Linker.new(self).unlink!
   end
 
-  # The receipt's files the user may open: a scanned receipt's follow the scan's account, an
-  # emailed receipt's its owner and the linked transaction's account (as blob access does).
+  # The receipt's files the user may open, by the rule blob access applies: a scanned receipt's
+  # follow the scan's account; an emailed receipt's, once on the linked transaction, follow that
+  # transaction's account (for the owner too), and before that belong to the owner.
   def receipt_documents_for(user)
+    account = linked_transaction&.entry&.account
     allowed =
       if receipt_scan
         receipt_scan.account.shared_with?(user)
+      elsif account
+        account.shared_with?(user)
       else
-        user_id == user.id || linked_transaction&.entry&.account&.shared_with?(user)
+        user_id == user.id
       end
     return [] unless allowed
 
@@ -165,11 +169,17 @@ class Purchase < ApplicationRecord
 
   # Called when the linked transaction is about to be deleted: an email purchase goes back to
   # waiting for its payment, a receipt purchase stays as history without a transaction.
+  # The linked transaction is going away. Its receipt files may already have moved to the bank's
+  # booked copy of it, where nothing links them to this purchase any more: take them off every
+  # transaction, so a later link attaches them afresh.
   def release_transaction!
-    update!(
-      transaction_id: nil,
-      matched_at: nil,
-      status: email? ? :awaiting_payment : :unmatched
-    )
+    transaction do
+      ActiveStorage::Attachment.where(record_type: "Transaction", name: "attachments", blob_id: receipt_files.blobs.select(:id)).delete_all
+      update!(
+        transaction_id: nil,
+        matched_at: nil,
+        status: email? ? :awaiting_payment : :unmatched
+      )
+    end
   end
 end

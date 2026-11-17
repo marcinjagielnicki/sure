@@ -14,6 +14,9 @@ class Purchase::EmailText
   MIN_FILE_BYTES = 20.kilobytes
   MAX_FILE_BYTES = 10.megabytes
   MAX_FILES = 5
+  # Receipts and invoices run to a page or two; longer PDFs are terms, catalogues or manuals,
+  # and the model accepts at most 100 PDF pages per request.
+  MAX_PDF_PAGES = 5
 
   FORWARD_MARKERS = [
     /-{3,}\s*Forwarded message\s*-{3,}/i,
@@ -72,10 +75,13 @@ class Purchase::EmailText
       end
     end
 
-    # The same file can show up both in a forwarded message and in the email around it.
+    # The same file can show up both in a forwarded message and in the email around it. Attached
+    # files come before images embedded in the layout (product photos, banners), which would
+    # otherwise take the slots ahead of an invoice; a phone's photo sent inline still counts.
     def receipt_files
       seen = Set.new
-      messages.flat_map(&:attachments).each_with_object([]) do |part, files|
+      parts = messages.flat_map(&:attachments).each_with_index.sort_by { |part, index| [ part.inline? ? 1 : 0, index ] }.map(&:first)
+      parts.each_with_object([]) do |part, files|
         break files if files.size >= MAX_FILES
         next unless seen.add?(Digest::SHA256.digest(part.body.raw_source.to_s))
 
@@ -95,9 +101,20 @@ class Purchase::EmailText
       return unless data.bytesize.between?(MIN_FILE_BYTES, MAX_FILE_BYTES)
 
       normalized = ReceiptScan::ImageNormalizer.call(io: StringIO.new(data), content_type:, filename: part.filename.presence || "attachment")
-      { data: normalized[:io].read, content_type: normalized[:content_type], filename: normalized[:filename] }
+      bytes = normalized[:io].read
+      return if normalized[:content_type] == "application/pdf" && !readable_short_pdf?(bytes)
+
+      { data: bytes, content_type: normalized[:content_type], filename: normalized[:filename] }
     rescue ReceiptScan::ImageNormalizer::UnsupportedFile, Vips::Error
       nil
+    end
+
+    # Encrypted or broken PDFs would make the model reject the whole request.
+    def readable_short_pdf?(bytes)
+      reader = PDF::Reader.new(StringIO.new(bytes))
+      reader.objects.trailer[:Encrypt].nil? && reader.page_count <= MAX_PDF_PAGES
+    rescue StandardError
+      false
     end
 
     def readable_body(message)
