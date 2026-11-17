@@ -345,6 +345,38 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_equal placeholder, scan.linked_transaction
   end
 
+  test "a processed receipt becomes a matched purchase with its items" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "30.00", "Food & Drink"), item("Soap", "20.00", "Household") ])
+
+    process(scan)
+
+    purchase = scan.reload.purchase
+    assert_equal "receipt", purchase.source
+    assert_equal "matched", purchase.status
+    assert_equal scan.linked_transaction, purchase.linked_transaction
+    assert_equal [ "Cheese", "Soap" ], purchase.items.map(&:name)
+    assert_equal [ @food, @household ], purchase.items.map(&:category)
+    assert_equal BigDecimal("50.00"), purchase.total
+    assert_equal "Corner Grocer", purchase.merchant
+    assert_equal @date, purchase.ordered_on
+    assert_equal "claude-test", purchase.ai_metadata["model"]
+    assert_equal Provider::Anthropic::ReceiptExtractor::PROMPT_VERSION, purchase.ai_metadata["prompt_version"]
+    assert_equal "Corner Grocer", purchase.ai_metadata.dig("raw_output", "merchant")
+    assert_equal purchase.ai_metadata, scan.extraction
+  end
+
+  test "a receipt merged into a bank transaction links its purchase there" do
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+
+    process(scan)
+
+    assert_equal bank.entryable, scan.reload.purchase.linked_transaction
+  end
+
   test "an unreadable currency keeps the account currency" do
     scan = upload("rotated.jpg", "image/jpeg")
     stub_extraction(currency: "ZL")
@@ -370,7 +402,7 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
 
     def stub_extraction(**overrides)
       extraction = build_receipt_extraction(**{ date: @date, line_items: [] }.merge(overrides))
-      provider = stub(supports_receipt_extraction?: true)
+      provider = stub(supports_receipt_extraction?: true, default_model: "claude-test")
       provider.stubs(:extract_receipt).returns(Provider::Response.new(success?: true, data: extraction, error: nil))
       Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     end
