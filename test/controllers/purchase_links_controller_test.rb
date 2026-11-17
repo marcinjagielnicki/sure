@@ -73,4 +73,19 @@ class PurchaseLinksControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to purchase_url(@purchase)
     assert_equal @entry.entryable, @purchase.reload.linked_transaction
   end
+
+  test "an entry linked to a twin order is no longer offered" do
+    other_entry = create_transaction(account: accounts(:depository), amount: BigDecimal("249.99"), date: @purchase.ordered_on, name: "SECOND CARD PAYMENT")
+    twin = Purchase.create!(family: @purchase.family, user: @user, source: :email, status: :needs_matching, merchant: "Allegro",
+                            order_number: "A-9", ordered_on: @purchase.ordered_on, total: @purchase.total, currency: @purchase.currency,
+                            match_candidate_entry_ids: [ @entry.id, other_entry.id ])
+    @purchase.update!(status: :needs_matching, match_candidate_entry_ids: [ @entry.id, other_entry.id ])
+
+    post purchase_link_url(@purchase), params: { entry_id: @entry.id }
+    get new_purchase_link_url(twin)
+
+    refute_includes response.body, "AMAZON MKTP"
+    assert_includes response.body, "SECOND CARD PAYMENT"
+    assert_equal [ other_entry.id ], twin.reload.match_candidate_entry_ids
+  end
 end
