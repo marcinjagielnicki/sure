@@ -32,7 +32,9 @@ module Assistant
     Function::GetBillAudit,
     Function::CreateBill,
     Function::UpdateBill,
-    Function::RecordBillPayment
+    Function::RecordBillPayment,
+    # Purchases: read from forwarded order emails and receipts, a preview module.
+    Function::GetPurchases
   ].freeze
 
   # Guests may view family configuration but not change it, so these tools are
