@@ -4,22 +4,32 @@
     <h1 class="text-xl font-medium text-primary"><%= t(".title") %></h1>
   </header>
 
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  <% filters = { q: @query.presence, start_date: params[:start_date].presence, end_date: params[:end_date].presence }.compact %>
+  <% date_input_classes = "h-10 min-w-0 flex-1 sm:flex-none sm:w-40 rounded-md border border-secondary bg-container px-3 text-base sm:text-sm text-primary focus-ring" %>
+  <%# Everything wraps to the width of the content column, not the window: with the side panels
+      open the column is far narrower than the viewport breakpoints assume. %>
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <%= render DS::SegmentedControl.new(aria_label: t(".tabs_label")) do |sc| %>
-      <% filters = { q: @query.presence, start_date: params[:start_date].presence, end_date: params[:end_date].presence } %>
-      <% sc.with_segment(t(".tabs.all"), href: purchases_path(**filters.compact), active: @tab == "all") %>
-      <% sc.with_segment(t(".tabs.to_match", count: @to_match_count), href: purchases_path(tab: "to_match", **filters.compact), active: @tab == "to_match") %>
+      <% sc.with_segment(t(".tabs.all"), href: purchases_path(**filters), active: @tab == "all") %>
+      <% sc.with_segment(t(".tabs.to_match", count: @to_match_count), href: purchases_path(tab: "to_match", **filters), active: @tab == "to_match") %>
     <% end %>
 
-    <%= render DS::SearchInput.new(name: "q", value: @query, placeholder: t(".search_placeholder"), form: "purchase_filters", class: "sm:w-72") %>
+    <%= form_with url: purchases_path, method: :get, class: "flex flex-wrap items-center gap-2 grow" do |form| %>
+      <%= hidden_field_tag :tab, @tab if @tab == "to_match" %>
+      <%= render DS::SearchInput.new(name: "q", value: @query, placeholder: t(".search_placeholder"), class: "grow basis-56") %>
+      <div class="flex items-center gap-2 grow sm:grow-0">
+        <%= form.date_field :start_date, value: params[:start_date], class: date_input_classes, "aria-label": t(".from") %>
+        <span class="text-secondary text-sm" aria-hidden="true">–</span>
+        <%= form.date_field :end_date, value: params[:end_date], class: date_input_classes, "aria-label": t(".to") %>
+      </div>
+      <div class="flex items-center gap-2">
+        <%= render DS::Button.new(type: "submit", text: t(".filter"), variant: :secondary, size: :md, icon: "list-filter") %>
+        <% if filters.any? %>
+          <%= render DS::Link.new(text: t(".clear"), href: purchases_path(tab: (@tab if @tab == "to_match")), variant: :ghost, size: :md) %>
+        <% end %>
+      </div>
+    <% end %>
   </div>
-
-  <%= styled_form_with url: purchases_path, method: :get, id: "purchase_filters", class: "flex flex-wrap items-end gap-3" do |form| %>
-    <%= hidden_field_tag :tab, @tab if @tab == "to_match" %>
-    <%= form.date_field :start_date, label: t(".from"), value: params[:start_date] %>
-    <%= form.date_field :end_date, label: t(".to"), value: params[:end_date] %>
-    <%= form.submit t(".filter") %>
-  <% end %>
 
   <% if @purchases.any? %>
     <div class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">

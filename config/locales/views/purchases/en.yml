@@ -59,6 +59,7 @@ en:
       from: From
       to: To
       filter: Filter
+      clear: Clear
       empty:
         title: No purchases yet
         description: Forward order confirmation emails to the order mailbox, or scan a receipt, and they'll show up here.
