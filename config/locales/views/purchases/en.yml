@@ -4,9 +4,6 @@ en:
     not_authorized: You can't change this purchase.
     unknown_merchant: Unknown shop
     sold_by: "sold by %{seller}"
-    more_items:
-      one: "+ %{count} more"
-      other: "+ %{count} more"
     items_count:
       one: "%{count} item"
       other: "%{count} items"
