@@ -59,6 +59,52 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     assert_nil domain_from("Allegro")
   end
 
+  test "an attached receipt photo is sent along, as JPEG" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Receipt", body: "")
+    mail.add_file(filename: "receipt.png", content: noise_png)
+
+    files = Purchase::EmailText.new(mail).call.files
+
+    assert_equal 1, files.size
+    assert_equal "image/jpeg", files.first[:content_type]
+    assert_equal "receipt.jpg", files.first[:filename]
+    assert files.first[:data].start_with?("\xFF\xD8".b)
+  end
+
+  test "a PDF is sent as it is" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Invoice", body: "Thank you for your order")
+    mail.add_file(filename: "invoice.pdf", content: fake_pdf)
+
+    files = Purchase::EmailText.new(mail).call.files
+
+    assert_equal [ [ "application/pdf", "invoice.pdf" ] ], files.map { [ _1[:content_type], _1[:filename] ] }
+  end
+
+  test "small images, other file types and oversized files are not sent" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Order", body: "Order")
+    mail.add_file(filename: "logo.png", content: Vips::Image.black(10, 10).pngsave_buffer)
+    mail.add_file(filename: "notes.txt", content: "x" * 30_000)
+    mail.add_file(filename: "huge.pdf", content: fake_pdf(11.megabytes))
+
+    assert_empty Purchase::EmailText.new(mail).call.files
+  end
+
+  test "at most five files are sent" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Order", body: "Order")
+    6.times { |index| mail.add_file(filename: "page#{index}.pdf", content: fake_pdf(25_000 + index)) }
+
+    assert_equal 5, Purchase::EmailText.new(mail).call.files.size
+  end
+
+  test "files inside an order forwarded as an attachment are found" do
+    inner = Mail.new(from: "shop@example.com", subject: "Your receipt", body: "Receipt attached")
+    inner.add_file(filename: "receipt.pdf", content: fake_pdf)
+    outer = Mail.new(from: "bob@bobdylan.com", subject: "Fwd: Your receipt", body: "")
+    outer.attachments["forwarded.eml"] = { mime_type: "message/rfc822", content: inner.to_s }
+
+    assert_equal [ "receipt.pdf" ], Purchase::EmailText.new(outer).call.files.map { _1[:filename] }
+  end
+
   test "decodes ISO-8859-2" do
     text = text_for("iso_8859_2.eml").text
 
@@ -89,6 +135,14 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
   end
 
   private
+    def noise_png
+      Vips::Image.gaussnoise(300, 300).cast(:uchar).pngsave_buffer
+    end
+
+    def fake_pdf(size = 25_000)
+      "%PDF-1.4\n" + ("x" * size)
+    end
+
     def domain_from(from)
       Purchase::EmailText.new(Mail.new(from:, subject: "Order", body: "Order total 10.00")).call.original_from_domain
     end

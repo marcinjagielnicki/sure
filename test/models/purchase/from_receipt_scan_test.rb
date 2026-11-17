@@ -20,7 +20,7 @@ class Purchase::FromReceiptScanTest < ActiveSupport::TestCase
     assert_equal "b", second.ai_metadata["model"]
   end
 
-  test "line discounts reduce the item amount and cash maps to other" do
+  test "line discounts reduce the item amount and cash stays cash" do
     @extraction["line_items"] = [ { "name" => "Cheese", "quantity" => "2", "amount" => "30.00", "discount" => "5.00", "category_name" => "Food & Drink" } ]
 
     purchase = Purchase::FromReceiptScan.sync!(@scan, extraction_hash: @extraction, ai_metadata: {})
@@ -29,7 +29,7 @@ class Purchase::FromReceiptScanTest < ActiveSupport::TestCase
     assert_equal BigDecimal("25.00"), item.amount
     assert_equal BigDecimal("2"), item.quantity
     assert_equal categories(:food_and_drink), item.category
-    assert_equal "other", purchase.payment_method
+    assert_equal "cash", purchase.payment_method
   end
 
   test "a scan without a transaction gives an unmatched purchase" do

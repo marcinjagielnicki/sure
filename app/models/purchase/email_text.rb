@@ -6,7 +6,14 @@ class Purchase::EmailText
 
   # original_from_domain: the registrable domain of whoever sent the order (the shop), read from
   # the forwarded block, the attached message, or an automatic forward's own From.
-  Result = Data.define(:text, :truncated, :input_chars, :original_from_domain)
+  # files: attachments that may be the purchase's receipt or invoice, normalized for the model.
+  Result = Data.define(:text, :truncated, :input_chars, :original_from_domain, :files)
+
+  FILE_CONTENT_TYPES = (ReceiptScan::ImageNormalizer::IMAGE_CONTENT_TYPES + [ "application/pdf" ]).freeze
+  # Smaller images are logos and icons from signatures and HTML layouts.
+  MIN_FILE_BYTES = 20.kilobytes
+  MAX_FILE_BYTES = 10.megabytes
+  MAX_FILES = 5
 
   FORWARD_MARKERS = [
     /-{3,}\s*Forwarded message\s*-{3,}/i,
@@ -43,7 +50,8 @@ class Purchase::EmailText
       text: text.first(MAX_CHARS),
       truncated: text.length > MAX_CHARS,
       input_chars: text.length,
-      original_from_domain: self.class.registrable_domain(headers["Original-From"])
+      original_from_domain: self.class.registrable_domain(headers["Original-From"]),
+      files: receipt_files
     )
   end
 
@@ -52,11 +60,44 @@ class Purchase::EmailText
 
     # An order forwarded as an attachment sits in a message/rfc822 part.
     def innermost_message
-      message = mail
-      while (part = message.all_parts.find { |candidate| candidate.mime_type == "message/rfc822" })
-        message = Mail.new(part.body.decoded)
+      messages.last
+    end
+
+    # The email and each message forwarded inside it, outermost first.
+    def messages
+      @messages ||= [ mail ].tap do |chain|
+        while (part = chain.last.all_parts.find { |candidate| candidate.mime_type == "message/rfc822" })
+          chain << Mail.new(part.body.decoded)
+        end
       end
-      message
+    end
+
+    # The same file can show up both in a forwarded message and in the email around it.
+    def receipt_files
+      seen = Set.new
+      messages.flat_map(&:attachments).each_with_object([]) do |part, files|
+        break files if files.size >= MAX_FILES
+        next unless seen.add?(Digest::SHA256.digest(part.body.raw_source.to_s))
+
+        file = receipt_file(part)
+        next unless file
+        next if files.sum { _1[:data].bytesize } + file[:data].bytesize > Provider::Anthropic::PurchaseExtractor::MAX_FILES_BYTES
+
+        files << file
+      end
+    end
+
+    def receipt_file(part)
+      content_type = part.mime_type.to_s.downcase
+      return unless content_type.in?(FILE_CONTENT_TYPES) || content_type.in?(ReceiptScan::ImageNormalizer::GENERIC_CONTENT_TYPES)
+
+      data = part.decoded.to_s.b
+      return unless data.bytesize.between?(MIN_FILE_BYTES, MAX_FILE_BYTES)
+
+      normalized = ReceiptScan::ImageNormalizer.call(io: StringIO.new(data), content_type:, filename: part.filename.presence || "attachment")
+      { data: normalized[:io].read, content_type: normalized[:content_type], filename: normalized[:filename] }
+    rescue ReceiptScan::ImageNormalizer::UnsupportedFile, Vips::Error
+      nil
     end
 
     def readable_body(message)

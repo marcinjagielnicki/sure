@@ -11,7 +11,8 @@ class Purchase::Validator
       order_number: raw["order_number"], order_date: (Date.iso8601(raw["order_date"].to_s) rescue nil),
       currency: raw["currency"], total: (decimal.(raw["total"]) rescue nil),
       shipping_cost: (decimal.(raw["shipping_cost"]) rescue nil), discount_total: (decimal.(raw["discount_total"]) rescue nil),
-      payment_method: raw["payment_method"], items: Array(raw["items"]), confidence: raw["confidence"] || {}, notes: raw["notes"]
+      payment_method: raw["payment_method"], items: Array(raw["items"]), confidence: raw["confidence"] || {}, notes: raw["notes"],
+      receipt_files: Array(raw["receipt_files"])
     )
   end
 

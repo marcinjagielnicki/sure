@@ -2,7 +2,7 @@
 # processor has already put the scan on its final transaction and categorized it, so the purchase
 # only records that link and the items.
 class Purchase::FromReceiptScan
-  PAYMENT_METHODS = { "card" => "card", "cash" => "other", "mixed" => "other" }.freeze
+  PAYMENT_METHODS = { "card" => "card", "cash" => "cash", "mixed" => "other" }.freeze
 
   # @param extraction_hash [Hash] a ReceiptExtraction as JSON (string keys)
   def self.sync!(scan, extraction_hash:, ai_metadata:)

@@ -63,6 +63,36 @@ class Provider::Anthropic::PurchaseExtractorTest < ActiveSupport::TestCase
     assert_equal [ "Household", "Groceries", nil ], category_schema[:enum]
   end
 
+  test "sends attached files as numbered image and document blocks" do
+    captured = nil
+    client = stub_client(build_response(input: order_input)) { |params| captured = params }
+    files = [ { data: "jpeg-bytes", content_type: "image/jpeg", filename: "receipt.jpg" },
+              { data: "%PDF-1.4", content_type: "application/pdf", filename: "invoice.pdf" } ]
+
+    extractor(client, files:).extract
+
+    content = captured[:messages].first[:content]
+    assert_equal [ "image", "document" ], content.filter_map { _1[:source] && _1[:type] }
+    assert_equal Base64.strict_encode64("jpeg-bytes"), content.find { _1[:type] == "image" }[:source][:data]
+    texts = content.filter_map { _1[:text] }.join("\n")
+    assert_includes texts, "File 1: receipt.jpg"
+    assert_includes texts, "File 2: invoice.pdf"
+    assert captured[:tools].first[:input_schema][:properties].key?(:receipt_files)
+  end
+
+  test "keeps only the numbers of files that were sent as the receipt files" do
+    files = [ { data: "a", content_type: "image/jpeg", filename: "a.jpg" }, { data: "b", content_type: "image/jpeg", filename: "b.jpg" } ]
+    client = stub_client(build_response(input: order_input.merge("receipt_files" => [ 2, "x", 7, 1, 2 ])))
+
+    assert_equal [ 2, 1 ], extractor(client, files:).extract.receipt_files
+  end
+
+  test "cash is a payment method" do
+    client = stub_client(build_response(input: order_input.merge("payment_method" => "cash")))
+
+    assert_equal "cash", extractor(client).extract.payment_method
+  end
+
   test "records usage with operation extract_purchase" do
     client = stub_client(build_response(input: order_input))
 
@@ -78,8 +108,8 @@ class Provider::Anthropic::PurchaseExtractorTest < ActiveSupport::TestCase
   end
 
   private
-    def extractor(client, category_names: [ "Household" ])
-      Provider::Anthropic::PurchaseExtractor.new(client, model: "claude-sonnet-4-6", text: @text, category_names:, family: @family)
+    def extractor(client, category_names: [ "Household" ], files: [])
+      Provider::Anthropic::PurchaseExtractor.new(client, model: "claude-sonnet-4-6", text: @text, files:, category_names:, family: @family)
     end
 
     def order_input
@@ -98,7 +128,8 @@ class Provider::Anthropic::PurchaseExtractorTest < ActiveSupport::TestCase
           { "name" => "Filtr HEPA", "quantity" => "2", "unit_price" => "39.99", "amount" => "79.98", "category_name" => "Household", "seller" => "sklep_agd" }
         ],
         "confidence" => { "total" => 0.9 },
-        "notes" => nil
+        "notes" => nil,
+        "receipt_files" => []
       }
     end
 
