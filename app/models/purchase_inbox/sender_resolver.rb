@@ -1,13 +1,14 @@
 # Decides whose an incoming email is, and whether it can be trusted. A manual forward comes from
 # the user's own address (a `sender` route); an automatic forward keeps the shop's From and is
-# sent to the mailbox's plus address (a `tag` route) from an allowed shop domain. When sender
-# authentication is on, the mail server's Authentication-Results must show the From domain passed
-# DMARC or aligned DKIM; only results written by the configured mail server are trusted, since
-# anyone can add such a header further down.
+# delivered to the mailbox's plus address (a `tag` route) from an allowed shop domain. The tag is
+# read only from the delivery headers the receiving server writes, never from To/Cc, which the
+# sender controls. When sender authentication is on, the mail server's Authentication-Results
+# must show DMARC pass for the From domain or DKIM pass aligned with it; only results written by
+# the configured mail server are trusted, since anyone can add such a header further down.
 class PurchaseInbox::SenderResolver
   Result = Data.define(:user, :route_kind, :reason)
 
-  RECIPIENT_HEADERS = %w[Delivered-To X-Original-To To Cc].freeze
+  DELIVERY_HEADERS = %w[Delivered-To X-Original-To].freeze
 
   def initialize(mail, config: PurchaseInbox.config)
     @mail = mail
@@ -40,16 +41,26 @@ class PurchaseInbox::SenderResolver
     def tag_route
       return unless shop_domain?(from_domain)
 
-      tags = recipient_addresses.filter_map { |address| address[/\A[^@+]+\+([^@]+)@/, 1] }
+      tags = delivery_addresses.filter_map { |address| tag_of(address) }
       PurchaseInboxRoute.tag.includes(:user).find_by(value: tags) if tags.any?
+    end
+
+    # The plus tag of an address on the mailbox itself, e.g. "bob" in orders+bob@example.com.
+    def tag_of(address)
+      local, domain = address.split("@", 2)
+      mailbox_local, mailbox_domain = config.username.to_s.downcase.split("@", 2)
+      base, tag = local.to_s.split("+", 2)
+      return if tag.blank? || mailbox_domain.blank?
+
+      tag if base == mailbox_local && domain == mailbox_domain
     end
 
     def sender_route
       PurchaseInboxRoute.sender.includes(:user).find_by(value: from_address) if from_address.present?
     end
 
-    def recipient_addresses
-      RECIPIENT_HEADERS.flat_map do |name|
+    def delivery_addresses
+      DELIVERY_HEADERS.flat_map do |name|
         Array(mail.header[name]).flat_map { |field| field.value.to_s.scan(/[^\s<>,;"]+@[^\s<>,;"]+/) }
       end.map(&:downcase).uniq
     end
@@ -59,11 +70,13 @@ class PurchaseInbox::SenderResolver
     end
 
     def authenticated?
+      return false unless Array(mail.from).one?
+
       results = trusted_results
       return false unless results
 
       methods = results.split(";").map(&:strip)
-      methods.any? { |method| dmarc_pass?(method) || dkim_pass?(method) || method.match?(/\Aarc=pass\b/) }
+      methods.any? { |method| dmarc_pass?(method) || dkim_pass?(method) }
     end
 
     # The topmost Authentication-Results written by the configured mail server.
@@ -78,8 +91,7 @@ class PurchaseInbox::SenderResolver
     def dmarc_pass?(method)
       return false unless method.match?(/\Admarc=pass\b/)
 
-      header_from = method[/header\.from=([^\s;]+)/, 1]
-      header_from.nil? || aligned?(header_from)
+      method[/header\.from=([^\s;]+)/, 1]&.downcase == from_domain
     end
 
     def dkim_pass?(method)
