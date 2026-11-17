@@ -32,7 +32,7 @@
   </div>
 
   <% if @purchase.review_reasons.any? %>
-    <%= render DS::Alert.new(variant: :warning, message: @purchase.review_reasons.map { t("purchases.review_reasons.#{_1["reason"]}", default: _1["reason"].to_s.humanize) }.uniq.to_sentence) %>
+    <%= render DS::Alert.new(variant: :warning, message: @purchase.review_reasons.map { purchase_review_reason(@purchase, _1) }.uniq.to_sentence) %>
   <% end %>
 
   <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">

@@ -39,6 +39,7 @@ en:
       too_old: The order is more than a year old.
       unknown_currency: The currency wasn't recognized.
       items_mismatch: The items don't add up to the total.
+      items_mismatch_detail: "The items don't add up to the total: items %{items} + delivery %{shipping} − discounts %{discount} = %{expected}, but the total is %{actual}."
       unknown_categories: Some items were given categories you don't have.
       amount_differs: The linked transaction's amount differs from the order, so it wasn't categorized.
       pending: The linked transaction is still pending, so it wasn't categorized.

@@ -14,6 +14,22 @@ class Purchase::ValidatorTest < ActiveSupport::TestCase
     assert_empty reasons(total: BigDecimal("239.99"), discount_total: BigDecimal("10.00"))
   end
 
+  test "a discount the item prices already include is not a mismatch" do
+    items = [ { "name" => "Filter", "amount" => "43.68" }, { "name" => "Bags", "amount" => "29.90" } ]
+
+    assert_empty reasons(items:, total: BigDecimal("73.58"), shipping_cost: BigDecimal("0"), discount_total: BigDecimal("10.95"))
+  end
+
+  test "a total that matches neither with nor without the discount is a mismatch" do
+    items = [ { "name" => "Filter", "amount" => "43.68" }, { "name" => "Bags", "amount" => "29.90" } ]
+
+    found = problems(items:, total: BigDecimal("80.00"), shipping_cost: BigDecimal("0"), discount_total: BigDecimal("10.95"))
+      .find { _1["reason"] == "items_mismatch" }
+
+    assert_equal({ "reason" => "items_mismatch", "expected" => "62.63", "actual" => "80.0", "items" => "73.58",
+                   "shipping" => "0.0", "discount" => "10.95" }, found)
+  end
+
   test "the mismatch check allows one cent of rounding" do
     assert_empty reasons(total: BigDecimal("250.00"))
   end

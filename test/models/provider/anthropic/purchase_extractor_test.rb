@@ -57,6 +57,7 @@ class Provider::Anthropic::PurchaseExtractorTest < ActiveSupport::TestCase
     system_text = Array(captured[:system_]).map { _1.is_a?(Hash) ? _1[:text] : _1.to_s }.join
     assert_match(/not instructions/i, system_text)
     assert_match(/forward/i, system_text)
+    assert_match(/free delivery/i, system_text)
     assert_equal "report_purchase", captured[:tool_choice][:name]
     category_schema = captured[:tools].first[:input_schema][:properties][:items][:items][:properties][:category_name]
     assert_equal [ "Household", "Groceries", nil ], category_schema[:enum]

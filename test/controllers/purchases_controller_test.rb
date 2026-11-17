@@ -119,4 +119,15 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_select "input[type=date][name=start_date][value='#{@awaiting.ordered_on.iso8601}']"
     assert_select "input[type=date][name=end_date]"
   end
+
+  test "the mismatch warning shows the numbers" do
+    @matched.update!(review_reasons: [ { "reason" => "items_mismatch", "expected" => "62.63", "actual" => "80.0",
+                                         "items" => "73.58", "shipping" => "0.0", "discount" => "10.95" } ])
+
+    get purchase_url(@matched)
+
+    assert_includes response.body, "$73.58"
+    assert_includes response.body, "$10.95"
+    assert_includes response.body, "$80.00"
+  end
 end
