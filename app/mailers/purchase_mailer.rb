@@ -14,6 +14,10 @@ class PurchaseMailer < ApplicationMailer
     purchase_mail(:unmatched)
   end
 
+  def needs_matching
+    purchase_mail(:needs_matching)
+  end
+
   def rejected
     @reason = params[:purchase].review_reasons.reverse.find { _1["reason"].in?(%w[duplicate not_an_order]) }
     @existing_purchase_url = purchase_url(@reason["purchase_id"]) if @reason&.dig("purchase_id")

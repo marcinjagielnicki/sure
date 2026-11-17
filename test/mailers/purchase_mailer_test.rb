@@ -37,6 +37,15 @@ class PurchaseMailerTest < ActionMailer::TestCase
     assert_includes body, purchase_url(@purchase)
   end
 
+  test "needs_matching links to the purchase to pick the payment" do
+    purchase = purchases(:allegro_awaiting)
+
+    mail = PurchaseMailer.with(purchase:).needs_matching
+
+    assert_equal [ @user.email ], mail.to
+    assert_includes mail.text_part.body.decoded, purchase_url(purchase)
+  end
+
   test "unmatched links to the purchases waiting for a match" do
     purchase = purchases(:allegro_awaiting)
 
