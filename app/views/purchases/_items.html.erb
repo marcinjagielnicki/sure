@@ -2,16 +2,23 @@
 <% currency = purchase.currency.presence || Current.family.currency %>
 <ul class="divide-y divide-subdued">
   <% purchase.items.includes(:category).each do |item| %>
-    <li class="flex items-center justify-between gap-3 py-2 text-sm">
-      <span class="min-w-0">
-        <span class="block text-primary truncate"><%= item.name %></span>
-        <span class="block text-xs text-secondary">
-          <% if item.quantity && item.quantity != 1 %><%= t("purchases.quantity", count: item.quantity.to_s("F").sub(/\.0\z/, "")) %> &middot; <% end %>
-          <%= item.category&.name || t("purchases.uncategorized") %>
-          <% if item.seller.present? %>&middot; <%= t("purchases.sold_by", seller: item.seller) %><% end %>
+    <% category = item.category || Category.uncategorized %>
+    <li class="flex items-start gap-3 py-2.5 text-sm">
+      <span class="w-8 shrink-0 text-secondary tabular-nums"><%= purchase_item_quantity(item) %></span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-primary break-words"><%= item.name %></span>
+        <span class="mt-0.5 flex items-center gap-1.5 text-xs text-secondary min-w-0">
+          <span data-testid="item-category" class="inline-flex items-center gap-1.5 min-w-0">
+            <span class="size-2 rounded-full shrink-0" style="background-color: <%= category.color %>"></span>
+            <span class="truncate"><%= category.name %></span>
+          </span>
+          <% if item.seller.present? %>
+            <span aria-hidden="true">·</span>
+            <span class="truncate"><%= t("purchases.sold_by", seller: item.seller) %></span>
+          <% end %>
         </span>
       </span>
-      <span class="text-primary privacy-sensitive shrink-0"><%= item.amount ? format_money(Money.new(item.amount, currency)) : "—" %></span>
+      <span class="shrink-0 text-primary privacy-sensitive"><%= item.amount ? format_money(Money.new(item.amount, currency)) : "—" %></span>
     </li>
   <% end %>
 </ul>

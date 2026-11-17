@@ -3,11 +3,7 @@ en:
   purchases:
     not_authorized: You can't change this purchase.
     unknown_merchant: Unknown shop
-    uncategorized: Uncategorized
     sold_by: "sold by %{seller}"
-    quantity:
-      one: "%{count} pc"
-      other: "%{count} pcs"
     more_items:
       one: "+ %{count} more"
       other: "+ %{count} more"
@@ -86,8 +82,7 @@ en:
         description: Forward order confirmation emails to the order mailbox, or scan a receipt, and they'll show up here.
     show:
       back: All purchases
-      order_number: "Order %{number}"
-      source: Source
+      order_number: Order number
       payment_method: Payment
       shipping: Delivery
       payment: Payment

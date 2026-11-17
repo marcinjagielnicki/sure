@@ -18,4 +18,9 @@ module PurchasesHelper
     Setting.brand_fetch_icon_url(purchase.merchant_domain) ||
       purchase.linked_transaction&.merchant&.logo_url.presence&.then { Setting.transform_brand_fetch_url(_1) }
   end
+
+  # "2×" for an item bought twice; nil when the email didn't say how many.
+  def purchase_item_quantity(item)
+    "#{item.quantity.to_s("F").delete_suffix(".0")}×" if item.quantity
+  end
 end

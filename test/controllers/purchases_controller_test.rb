@@ -102,6 +102,37 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Starbucks"
   end
 
+  test "the purchase page leads with the shop's logo and lists its details" do
+    get purchase_url(@matched)
+
+    assert_select "[data-testid=purchase-header] span.size-12"
+    assert_select "dl dt", text: "Payment"
+    assert_select "dl dt", text: "Order number"
+    assert_select "dl dd", text: "A-1000"
+  end
+
+  test "items show their quantity and category colour" do
+    @matched.items.create!(name: "Mugs", quantity: 2, amount: 0, position: 1)
+    category = categories(:food_and_drink)
+
+    get purchase_url(@matched)
+
+    assert_select "li", text: /2×\s*Mugs/
+    assert_select "[data-testid=item-category]", text: /#{Regexp.escape(category.name)}/ do
+      assert_select "span[style*='#{category.color}']"
+    end
+  end
+
+  test "the payment card shows the linked transaction with its account" do
+    entry = @matched.linked_transaction.entry
+
+    get purchase_url(@matched)
+
+    assert_select "[data-testid=purchase-payment]" do
+      assert_select "a[href='#{transaction_path(entry)}']", text: /#{Regexp.escape(entry.account.name)}/
+    end
+  end
+
   test "another member's unlinked purchase is not found" do
     member = users(:family_member)
     member.update!(preferences: member.preferences.merge("preview_features_enabled" => true))
