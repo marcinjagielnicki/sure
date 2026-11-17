@@ -1218,6 +1218,11 @@
   "receiptUploaded": "Receipt uploaded. Its transaction will be filled in shortly.",
   "@receiptUploaded": { "description": "Confirmation after a receipt upload." },
 
+  "receiptScannerFailed": "Couldn't open the scanner: {message}",
+  "@receiptScannerFailed": {
+    "description": "Shown when the document scanner cannot be opened.",
+    "placeholders": { "message": { "type": "String" } }
+  },
   "receiptUploadFailed": "Couldn't upload the receipt: {message}",
   "@receiptUploadFailed": {
     "description": "Error shown when a receipt upload fails.",

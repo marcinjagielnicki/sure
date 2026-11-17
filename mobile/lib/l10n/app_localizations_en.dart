@@ -1273,6 +1273,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Receipt uploaded. Its transaction will be filled in shortly.';
 
   @override
+  String receiptScannerFailed(String message) {
+    return 'Couldn\'t open the scanner: $message';
+  }
+
+  @override
   String receiptUploadFailed(String message) {
     return 'Couldn\'t upload the receipt: $message';
   }
