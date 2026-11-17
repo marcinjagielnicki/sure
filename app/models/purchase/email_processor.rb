@@ -20,7 +20,7 @@ class Purchase::EmailProcessor
     @email_text = Purchase::EmailText.new(mail).call
     @subject = mail.subject
 
-    response = provider.extract_purchase(text: email_text.text, category_names: family.categories.pluck(:name), family:)
+    response = provider.extract_purchase(text: email_text.text, files: email_text.files, category_names: family.categories.pluck(:name), family:)
     return record_failure(response.error) unless response.success?
 
     @extraction = response.data
@@ -66,7 +66,13 @@ class Purchase::EmailProcessor
         return :rejected
       end
 
-      purchase.update!(status: :awaiting_payment, match_deadline_on: extraction.order_date&.+(Purchase::DEADLINE_DAYS))
+      keep_receipt_files
+      # A cash payment never shows up in a bank account: the user links or adds it by hand.
+      if purchase.paid_by_cash?
+        purchase.update!(status: :unmatched, match_deadline_on: nil)
+      else
+        purchase.update!(status: :awaiting_payment, match_deadline_on: extraction.order_date&.+(Purchase::DEADLINE_DAYS))
+      end
       :processed
     end
 
@@ -115,6 +121,18 @@ class Purchase::EmailProcessor
       end
     end
 
+    def keep_receipt_files
+      purchase.receipt_files.purge
+      receipt_file_numbers.each do |number|
+        file = email_text.files[number - 1]
+        purchase.receipt_files.attach(io: StringIO.new(file[:data]), filename: file[:filename], content_type: file[:content_type])
+      end
+    end
+
+    def receipt_file_numbers
+      Array(extraction.receipt_files)
+    end
+
     # Another email purchase of this family for the same shop and order number. Checked under the
     # family's lock so two copies processed at once can't both pass.
     def duplicate_of
@@ -139,7 +157,11 @@ class Purchase::EmailProcessor
         "raw_output" => extraction.to_h.as_json,
         "validation" => problems,
         "input_chars" => email_text.input_chars,
-        "truncated" => email_text.truncated
+        "truncated" => email_text.truncated,
+        "files" => email_text.files.each_with_index.map do |file, index|
+          { "filename" => file[:filename], "content_type" => file[:content_type], "bytes" => file[:data].bytesize,
+            "receipt" => receipt_file_numbers.include?(index + 1) }
+        end
       }
     end
 

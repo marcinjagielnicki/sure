@@ -26,6 +26,7 @@ class Purchase::Linker
       )
       transaction.update!(extra: transaction.extra.merge("purchase" => summary))
       forget_candidate_elsewhere(entry)
+      attach_receipt_files(transaction)
 
       if (reason = mismatch_reason(entry))
         purchase.flag!(reason, entry_id: entry.id) if manual
@@ -69,6 +70,7 @@ class Purchase::Linker
       transaction = purchase.linked_transaction
       if transaction
         transaction.update!(extra: transaction.extra.except("purchase"))
+        detach_receipt_files(transaction)
         rejected = purchase.rejected_entry_ids | [ transaction.entry.id ]
       end
 
@@ -83,6 +85,23 @@ class Purchase::Linker
 
   private
     attr_reader :purchase
+
+    # The receipt goes along with the payment, unless the transaction has no room left for it.
+    def attach_receipt_files(transaction)
+      blobs = purchase.receipt_files.blobs.where.not(id: transaction.attachments_attachments.select(:blob_id)).to_a
+      return if blobs.empty?
+
+      if transaction.attachments.count + blobs.size > Transaction::MAX_ATTACHMENTS_PER_TRANSACTION
+        purchase.flag!(:too_many_attachments, entry_id: transaction.entry.id)
+      else
+        transaction.attachments.attach(blobs)
+      end
+    end
+
+    # Removes only the attachment records: the files stay on the purchase.
+    def detach_receipt_files(transaction)
+      transaction.attachments_attachments.where(blob_id: purchase.receipt_files.blobs.select(:id)).delete_all
+    end
 
     # Other purchases waiting for a pick (e.g. an identical order) no longer offer this entry.
     def forget_candidate_elsewhere(entry)

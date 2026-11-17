@@ -147,6 +147,30 @@ class Purchase::LinkerTest < ActiveSupport::TestCase
     assert_equal @shopping, @entry.reload.entryable.category
   end
 
+  test "linking moves the receipt files onto the transaction and unlinking takes them off" do
+    @purchase.receipt_files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+
+    @purchase.link!(@entry)
+    assert_equal [ "receipt.jpg" ], @entry.entryable.reload.attachments.map { _1.filename.to_s }
+
+    @purchase.unlink!
+    assert_empty @entry.entryable.reload.attachments
+    assert_equal 1, @purchase.reload.receipt_files.count
+  end
+
+  test "receipt files that would exceed the transaction's attachment limit stay on the purchase" do
+    Transaction::MAX_ATTACHMENTS_PER_TRANSACTION.times do |index|
+      @entry.entryable.attachments.attach(io: StringIO.new("x#{index}"), filename: "f#{index}.pdf", content_type: "application/pdf")
+    end
+    @purchase.receipt_files.attach(io: StringIO.new("jpeg"), filename: "receipt.jpg", content_type: "image/jpeg")
+
+    @purchase.link!(@entry)
+
+    assert_equal "matched", @purchase.reload.status
+    assert_equal Transaction::MAX_ATTACHMENTS_PER_TRANSACTION, @entry.entryable.reload.attachments.count
+    assert_includes @purchase.review_reasons.map { _1["reason"] }, "too_many_attachments"
+  end
+
   test "an already split transaction is linked without changes" do
     @entry.split!([ { name: "A", amount: 50, category_id: nil }, { name: "B", amount: 50, category_id: nil } ])
 
