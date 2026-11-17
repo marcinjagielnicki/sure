@@ -71,6 +71,13 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     assert files.first[:data].start_with?("\xFF\xD8".b)
   end
 
+  test "a photo labelled image/jpg by the mail app is sent too" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Receipt", body: "")
+    mail.attachments["receipt.jpg"] = { mime_type: "image/jpg", content: Vips::Image.gaussnoise(300, 300).cast(:uchar).jpegsave_buffer(Q: 95) }
+
+    assert_equal [ "image/jpeg" ], Purchase::EmailText.new(mail).call.files.map { _1[:content_type] }
+  end
+
   test "a PDF is sent as it is" do
     mail = Mail.new(from: "bob@bobdylan.com", subject: "Invoice", body: "Thank you for your order")
     mail.add_file(filename: "invoice.pdf", content: fake_pdf)
