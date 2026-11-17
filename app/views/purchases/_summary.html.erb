@@ -1,0 +1,32 @@
+<%# locals: (summary:) %>
+<% tile_classes = "flex-1 basis-40 min-w-0 bg-container rounded-xl shadow-border-xs px-4 py-3" %>
+<div data-testid="purchases-summary" class="flex flex-wrap gap-3">
+  <div class="<%= tile_classes %>">
+    <p class="text-xs text-secondary"><%= t("purchases.summary.this_month") %></p>
+    <p class="mt-1 text-xl font-medium text-primary privacy-sensitive truncate">
+      <%= format_money(summary.spent) %>
+      <% if summary.other_spent.any? %>
+        <span class="text-sm text-secondary">+ <%= summary.other_spent.map { format_money(_1) }.join(" + ") %></span>
+      <% end %>
+    </p>
+    <p class="mt-0.5 text-xs text-secondary">
+      <%= t("purchases.summary.purchases", count: summary.purchases_count) %> · <%= t("purchases.summary.items", count: summary.items_count) %>
+    </p>
+  </div>
+
+  <div class="<%= tile_classes %>">
+    <p class="text-xs text-secondary"><%= t("purchases.summary.to_match") %></p>
+    <p class="mt-1 text-xl font-medium <%= summary.to_match_count.positive? ? "text-warning" : "text-primary" %>"><%= summary.to_match_count %></p>
+    <p class="mt-0.5 text-xs text-secondary">
+      <%= summary.to_match_count.positive? ? t("purchases.summary.to_match_waiting") : t("purchases.summary.to_match_none") %>
+    </p>
+  </div>
+
+  <div class="<%= tile_classes %>">
+    <p class="text-xs text-secondary"><%= t("purchases.summary.top_merchant") %></p>
+    <p class="mt-1 text-xl font-medium text-primary truncate"><%= summary.top_merchant || "—" %></p>
+    <p class="mt-0.5 text-xs text-secondary">
+      <%= summary.top_merchant ? t("purchases.summary.top_merchant_orders", count: summary.top_merchant_count) : t("purchases.summary.top_merchant_none") %>
+    </p>
+  </div>
+</div>

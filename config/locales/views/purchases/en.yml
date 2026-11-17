@@ -11,6 +11,25 @@ en:
     more_items:
       one: "+ %{count} more"
       other: "+ %{count} more"
+    items_count:
+      one: "%{count} item"
+      other: "%{count} items"
+    summary:
+      this_month: This month
+      purchases:
+        one: "%{count} purchase"
+        other: "%{count} purchases"
+      items:
+        one: "%{count} item"
+        other: "%{count} items"
+      to_match: To match
+      to_match_waiting: Waiting for a payment
+      to_match_none: Every order is paid
+      top_merchant: Top shop
+      top_merchant_orders:
+        one: "%{count} order this month"
+        other: "%{count} orders this month"
+      top_merchant_none: No orders this month yet
     sources:
       email: Order email
       receipt: Receipt
@@ -61,6 +80,7 @@ en:
       to: To
       filter: Filter
       clear: Clear
+      no_date: No date
       empty:
         title: No purchases yet
         description: Forward order confirmation emails to the order mailbox, or scan a receipt, and they'll show up here.
