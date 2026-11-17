@@ -41,6 +41,8 @@ class Purchase < ApplicationRecord
     unknown: "unknown"
   }, prefix: :paid_by, validate: true
 
+  LinkError = Class.new(StandardError)
+
   scope :to_match, -> { where(status: OPEN_STATUSES) }
 
   # Purchases a user may see: their own, and others' that are linked to a transaction on an
@@ -53,6 +55,34 @@ class Purchase < ApplicationRecord
 
   def match_window_days
     paid_by_cash_on_delivery? ? COD_MATCH_WINDOW_DAYS : MATCH_WINDOW_DAYS
+  end
+
+  def link!(entry, manual: false)
+    Purchase::Linker.new(self).link!(entry, manual:)
+  end
+
+  def unlink!
+    Purchase::Linker.new(self).unlink!
+  end
+
+  def dismiss!
+    update!(status: :dismissed, match_candidate_entry_ids: [])
+  end
+
+  # Looks for the payment and records what was found. Returns the match kind.
+  def apply_match!
+    result = Purchase::Matcher.new(self).result
+    case result.kind
+    when :single
+      link!(result.entries.first)
+    when :ambiguous
+      update!(status: :needs_matching, match_candidate_entry_ids: result.entries.map(&:id))
+    when :none
+      update!(status: :awaiting_payment, match_candidate_entry_ids: []) unless unmatched?
+    when :skipped
+      update!(status: :unmatched, match_candidate_entry_ids: [])
+    end
+    result.kind
   end
 
   def flag!(reason_key, **details)
