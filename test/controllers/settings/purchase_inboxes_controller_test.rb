@@ -99,6 +99,19 @@ class Settings::PurchaseInboxesControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("settings.purchase_inboxes.update.incomplete"), flash[:alert]
   end
 
+  test "clearing a required field while the mailbox is on turns it off and says so" do
+    Setting.purchase_inbox_enabled = true
+    Setting.purchase_inbox_host = "imap.example.com"
+    Setting.purchase_inbox_username = "orders@example.com"
+    Setting.purchase_inbox_password = "x"
+    Setting.purchase_inbox_authserv_id = "mx.google.com"
+
+    patch settings_purchase_inbox_url, params: { setting: { authserv_id: "" } }
+
+    assert_not Setting.purchase_inbox_enabled
+    assert_equal I18n.t("settings.purchase_inboxes.update.incomplete"), flash[:alert]
+  end
+
   test "a family admin on an instance with several families can't change it" do
     @admin.update!(role: :admin)
     User.any_instance.stubs(:manages_instance_settings?).returns(false)
