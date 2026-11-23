@@ -72,6 +72,18 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     end
   end
 
+  test "a scan whose files can't be stored ends as failed instead of processing" do
+    ActiveStorage::Attached::Changes::CreateMany.any_instance.stubs(:upload).raises(StandardError, "storage down")
+
+    scan = nil
+    assert_no_enqueued_jobs(only: ReceiptScan::ProcessJob) do
+      scan = upload("rotated.jpg", "image/jpeg")
+    end
+
+    assert scan.reload.failed?
+    assert_equal "storage down", scan.error
+  end
+
   test "rejects txt" do
     assert_raises(ReceiptScan::InvalidUpload) do
       ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,

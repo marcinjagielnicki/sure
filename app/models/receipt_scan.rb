@@ -44,23 +44,34 @@ class ReceiptScan < ApplicationRecord
     def create_from_upload!(family:, user:, account:, uploads:)
       normalized = normalize_uploads!(Array(uploads).compact)
 
-      scan = transaction do
-        # Reloads the account's family under the lock, so a transfer that just committed fails
-        # the family check instead of leaving the scan in the old family.
-        account.lock!
-        scan = create!(family:, user:, account:)
-        normalized.each { |file| scan.files.attach(**file) }
+      scan = nil
+      begin
+        transaction do
+          # Reloads the account's family under the lock, so a transfer that just committed fails
+          # the family check instead of leaving the scan in the old family. The uploader is
+          # locked first, in the order User#transfer_to_family! takes them.
+          user.lock!
+          account.lock!
+          scan = create!(family:, user:, account:)
+          normalized.each { |file| scan.files.attach(**file) }
 
-        entry = account.entries.create!(
-          name: I18n.t("receipt_scans.placeholder_name"),
-          date: Date.current,
-          amount: 0,
-          currency: account.currency,
-          entryable: Transaction.new(extra: { "receipt" => { "scan_id" => scan.id, "status" => "processing" } })
-        )
-        entry.entryable.attachments.attach(scan.files.blobs)
-        scan.update!(linked_transaction: entry.entryable)
-        scan
+          entry = account.entries.create!(
+            name: I18n.t("receipt_scans.placeholder_name"),
+            date: Date.current,
+            amount: 0,
+            currency: account.currency,
+            entryable: Transaction.new(extra: { "receipt" => { "scan_id" => scan.id, "status" => "processing" } })
+          )
+          entry.entryable.attachments.attach(scan.files.blobs)
+          scan.update!(linked_transaction: entry.entryable)
+        end
+      rescue StandardError => e
+        # Active Storage uploads the files after the commit; when that fails the scan exists
+        # without readable files, so it ends as failed rather than being read.
+        raise unless scan&.persisted? && exists?(scan.id)
+
+        ReceiptScan::Processor.new(scan.reload).fail!(e)
+        return scan
       end
 
       enqueue_processing(scan)
