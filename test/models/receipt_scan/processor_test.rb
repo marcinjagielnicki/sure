@@ -337,7 +337,7 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     scan = upload("rotated.jpg", "image/jpeg")
     placeholder = scan.linked_transaction
     stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
-    ReceiptScan::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
+    Purchase::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
 
     assert_nothing_raised { process(scan) }
 
