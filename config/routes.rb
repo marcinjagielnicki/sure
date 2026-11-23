@@ -771,6 +771,8 @@ Rails.application.routes.draw do
     resource :sharing, only: [ :show, :update ], controller: "account_sharings"
   end
 
+  resources :receipt_scans, only: %i[new create]
+
   resources :purchases, only: %i[index show] do
     member do
       post :dismiss
