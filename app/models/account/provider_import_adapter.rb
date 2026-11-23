@@ -128,7 +128,7 @@ class Account::ProviderImportAdapter
         # not to a receipt or manual entry of the same amount.
         linked_pending = pending_transaction_id.present? && account.entries.exists?(external_id: pending_transaction_id, source: source)
         scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency)
-        receipt = find_receipt_transaction(date: date, amount: amount, currency: currency) unless scheduled || linked_pending
+        receipt = unclaimed(find_receipt_transaction(date: date, amount: amount, currency: currency)) unless scheduled || linked_pending
         duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency) unless scheduled || receipt || linked_pending
 
         if scheduled
@@ -863,6 +863,9 @@ class Account::ProviderImportAdapter
                    .where(currency: currency)
                    .where(parent_entry_id: nil)
 
+    # A zero-amount receipt is a placeholder whose receipt was never read, not a payment.
+    query = query.where.not(entryable_id: Transaction.where("transactions.extra ? 'receipt'").select(:id)) if amount.to_d.zero?
+
     query = if date_window.to_i.zero?
       query.where(date: date)
     else
@@ -903,6 +906,8 @@ class Account::ProviderImportAdapter
       .where(entryable_type: "Transaction", external_id: nil, amount: amount, currency: currency)
       .where(date: (date - date_window.days)..(date + date_window.days))
       .where("entries.created_at < entries.date")
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where("transactions.extra -> 'receipt' ->> 'status' IS DISTINCT FROM 'processing'")
       .to_a
       .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
   end
@@ -911,8 +916,12 @@ class Account::ProviderImportAdapter
   # is claimed the way an ahead-of-time transaction is: card payments book a few days after the
   # receipt date, and the claim must go through even when the receipt was split (which protects
   # the entry) so a pending claim can still reconcile with its booked version.
+  #
+  # A zero amount never matches: that is a placeholder whose receipt was never read. Entries the
+  # user excluded don't either, except a split parent, which is always excluded.
   def find_receipt_transaction(date:, amount:, currency:, date_window: ReceiptScan::MATCH_DATE_WINDOW)
     date = Date.parse(date.to_s) unless date.is_a?(Date)
+    return if amount.to_d.zero?
 
     account.entries
       .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
@@ -920,6 +929,7 @@ class Account::ProviderImportAdapter
       .where(date: (date - date_window.days)..(date + date_window.days))
       .where("transactions.extra ? 'receipt'")
       .where("transactions.extra -> 'receipt' ->> 'status' IS DISTINCT FROM 'processing'")
+      .where("entries.excluded = FALSE OR EXISTS (SELECT 1 FROM entries parts WHERE parts.parent_entry_id = entries.id)")
       .to_a
       .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
   end
@@ -1179,6 +1189,14 @@ class Account::ProviderImportAdapter
   end
 
   private
+    # Locks a candidate for the rest of the import's transaction and drops it if another import
+    # claimed it since it was found.
+    def unclaimed(entry)
+      return unless entry
+
+      entry.lock!
+      entry if entry.external_id.nil?
+    end
 
     # The latest earlier holding of the security the provider reports. A
     # remapped row records that security in provider_security_id; an

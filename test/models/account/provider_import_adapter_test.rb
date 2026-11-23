@@ -1861,6 +1861,61 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_equal Date.current - 2.days, entry.reload.date
   end
 
+  test "a posted transaction does not claim a receipt the user excluded" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    receipt.update!(excluded: true)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_excluded", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+  end
+
+  test "a zero amount booking does not claim a receipt that was never read" do
+    failed = @account.entries.create!(
+      date: Date.current, amount: 0, currency: "USD", name: "Processing receipt…",
+      entryable: Transaction.new(extra: { "receipt" => { "status" => "needs_review" } })
+    )
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_zero_hold", amount: 0, currency: "USD",
+      date: Date.current, name: "CARD HOLD", source: "simplefin"
+    )
+
+    assert_not_equal failed.id, entry.id
+  end
+
+  test "a receipt still being read is not claimed as an upcoming payment" do
+    placeholder = @account.entries.create!(
+      date: Date.current + 1.day, amount: 0, currency: "USD", name: "Processing receipt…",
+      entryable: Transaction.new(extra: { "receipt" => { "status" => "processing" } })
+    )
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_zero_upcoming", amount: 0, currency: "USD",
+      date: Date.current, name: "CARD HOLD", source: "simplefin"
+    )
+
+    assert_not_equal placeholder.id, entry.id
+  end
+
+  test "a receipt another import claimed meanwhile is not claimed again" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    stale = Entry.find(receipt.id)
+    receipt.update_columns(external_id: "simplefin_first", source: "simplefin")
+    @adapter.stubs(:find_receipt_transaction).returns(stale)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_second", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+    assert_equal "simplefin_first", receipt.reload.external_id
+  end
+
   test "a statement import row finds a receipt entry within its window" do
     receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
 
