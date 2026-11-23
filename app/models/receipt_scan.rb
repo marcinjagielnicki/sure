@@ -44,6 +44,9 @@ class ReceiptScan < ApplicationRecord
       normalized = normalize_uploads!(Array(uploads).compact)
 
       scan = transaction do
+        # Reloads the account's family under the lock, so a transfer that just committed fails
+        # the family check instead of leaving the scan in the old family.
+        account.lock!
         scan = create!(family:, user:, account:)
         normalized.each { |file| scan.files.attach(**file) }
 
@@ -81,7 +84,7 @@ class ReceiptScan < ApplicationRecord
         raise InvalidUpload, I18n.t("receipt_scans.errors.no_files") if uploads.empty?
         raise InvalidUpload, I18n.t("receipt_scans.errors.too_many_files", count: MAX_FILES) if uploads.size > MAX_FILES
 
-        uploads.map do |upload|
+        files = uploads.map do |upload|
           if upload.size > MAX_FILE_SIZE
             raise InvalidUpload, I18n.t("receipt_scans.errors.too_large", size: MAX_FILE_SIZE / 1.megabyte)
           end
@@ -90,6 +93,12 @@ class ReceiptScan < ApplicationRecord
         rescue ReceiptScan::ImageNormalizer::UnsupportedFile
           raise InvalidUpload, I18n.t("receipt_scans.errors.unsupported_file", filename: upload.original_filename)
         end
+
+        if files.many? && files.any? { |file| file[:content_type] == "application/pdf" }
+          raise InvalidUpload, I18n.t("receipt_scans.errors.pdf_with_other_files")
+        end
+
+        files
       end
   end
 

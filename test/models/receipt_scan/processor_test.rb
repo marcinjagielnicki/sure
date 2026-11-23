@@ -54,6 +54,24 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert scan.reload.failed?
   end
 
+  test "rejects a pdf sent with other files" do
+    [ uploaded("receipt.pdf", "application/pdf"), uploaded("rotated.jpg", "image/jpeg") ].each do |other|
+      assert_raises(ReceiptScan::InvalidUpload) do
+        ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,
+                                         uploads: [ uploaded("receipt.pdf", "application/pdf"), other ])
+      end
+    end
+  end
+
+  test "rejects an account moved to another family before the scan is saved" do
+    stale = Account.find(@account.id)
+    @account.update_columns(family_id: families(:empty).id)
+
+    assert_raises(ActiveRecord::RecordInvalid) do
+      ReceiptScan.create_from_upload!(family: @family, user: @user, account: stale, uploads: [ uploaded("rotated.jpg", "image/jpeg") ])
+    end
+  end
+
   test "rejects txt" do
     assert_raises(ReceiptScan::InvalidUpload) do
       ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,
