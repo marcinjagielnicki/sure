@@ -122,8 +122,11 @@ class Account::ProviderImportAdapter
       # before linking their account to a provider
       # Note: We don't pass name here to allow matching even when provider formats names differently
       if entry.new_record? && allow_heuristic_matching
+        # A booking the provider links to its pending entry belongs to that entry,
+        # not to a receipt of the same amount.
+        linked_pending = pending_transaction_id.present? && account.entries.exists?(external_id: pending_transaction_id, source: source)
         scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency) ||
-          find_receipt_transaction(date: date, amount: amount, currency: currency)
+          (find_receipt_transaction(date: date, amount: amount, currency: currency) unless linked_pending)
         duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency) unless scheduled
 
         if scheduled

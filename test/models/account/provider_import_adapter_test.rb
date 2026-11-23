@@ -2644,6 +2644,23 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "a booking linked to its pending by id claims that pending, not a receipt of the same amount" do
+    pending = @adapter.import_transaction(
+      external_id: "plaid_pending_receipt", amount: 42.00, currency: "USD", date: Date.today - 2.days,
+      name: "Coffee Shop", source: "plaid", extra: { "plaid" => { "pending" => true } }
+    )
+    receipt = create_receipt_entry(date: Date.today - 1.day, amount: 42.00)
+
+    posted = @adapter.import_transaction(
+      external_id: "plaid_posted_receipt", amount: 42.00, currency: "USD", date: Date.today,
+      name: "Coffee Shop", source: "plaid", pending_transaction_id: "plaid_pending_receipt",
+      extra: { "plaid" => { "pending" => false } }
+    )
+
+    assert_equal pending.id, posted.id
+    assert_nil receipt.reload.external_id
+  end
+
   test "preserves transaction tags when re-importing existing transaction" do
     tag = Tag.create!(name: "Salary", family: @family)
 
