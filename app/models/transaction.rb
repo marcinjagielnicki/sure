@@ -816,6 +816,7 @@ class Transaction < ApplicationRecord
       to.tags << new_tags if new_tags.any?
 
       carry_over_receipt(from:, to:)
+      carry_over_purchase(from:, to:)
     end
 
     # A receipt read onto the pending transaction moves with its scan, unless the posted one
@@ -825,6 +826,15 @@ class Transaction < ApplicationRecord
 
       to.update!(extra: to.extra.merge("receipt" => from.extra["receipt"]))
       ReceiptScan.where(transaction_id: from.id).update_all(transaction_id: to.id, updated_at: Time.current)
+    end
+
+    # The purchase paid by the pending transaction is paid by its booking. If the booking already
+    # has a purchase, that one stays and the pending's is released with the pending entry.
+    def carry_over_purchase(from:, to:)
+      return if Purchase.exists?(transaction_id: to.id)
+
+      Purchase.where(transaction_id: from.id).update_all(transaction_id: to.id, updated_at: Time.current)
+      from.association(:purchase).reset
     end
 
     def attachment_count_after_merge(from:, to:)
