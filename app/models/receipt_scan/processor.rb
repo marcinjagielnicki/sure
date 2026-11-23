@@ -131,7 +131,15 @@ class ReceiptScan::Processor
     # Holds the bank entry's lock until the scan's work commits, so two scans that both picked it
     # don't both merge: the second sees the first one's receipt and keeps its placeholder.
     def merge_into(bank_transaction)
+      bank_entry = bank_transaction.entry
+      bank_entry.lock!
       bank_transaction.lock!
+      # The bank may have changed the entry since the matcher picked it (a pending booked at
+      # another amount); then it is no longer this payment.
+      unless bank_entry.amount == extraction.total && bank_entry.currency == extraction.currency && !bank_entry.excluded?
+        return placeholder
+      end
+
       if bank_transaction.extra["receipt"].present?
         scan.flag!(:duplicate_receipt, entry_id: bank_transaction.entry.id)
         return placeholder
