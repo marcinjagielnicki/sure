@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/account.dart';
 import '../providers/auth_provider.dart';
 import '../providers/privacy_provider.dart';
+import '../services/app_lock_guard.dart';
 import '../services/preferences_service.dart';
 import '../services/receipts_service.dart';
 import '../utils/money_masker.dart';
@@ -69,13 +70,17 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
   Future<List<XFile>?> _scan(int maxPages) async {
     if (widget.scanDocument != null) return widget.scanDocument!(maxPages);
 
-    final paths = await CunningDocumentScanner.getPictures(
-      noOfPages: maxPages,
-      scannerSource: ScannerSource.camera,
-      iosScannerOptions: IosScannerOptions(
-        imageFormat: IosImageFormat.jpg,
-        jpgCompressionQuality: 0.85,
-        showFilterBar: false,
+    // The scanner and the picker are native screens: opening them mustn't
+    // lock the app and ask for Face ID again.
+    final paths = await AppLockGuard.instance.whileNativeScreenOpen(
+      () => CunningDocumentScanner.getPictures(
+        noOfPages: maxPages,
+        scannerSource: ScannerSource.camera,
+        iosScannerOptions: IosScannerOptions(
+          imageFormat: IosImageFormat.jpg,
+          jpgCompressionQuality: 0.85,
+          showFilterBar: false,
+        ),
       ),
     );
     return paths?.map(XFile.new).toList();
@@ -83,8 +88,8 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
 
   Future<List<XFile>> _pickFromGallery() {
     if (widget.pickFromGallery != null) return widget.pickFromGallery!();
-    return ImagePicker()
-        .pickMultiImage(imageQuality: 85, maxWidth: 2000, maxHeight: 2000);
+    return AppLockGuard.instance.whileNativeScreenOpen(() => ImagePicker()
+        .pickMultiImage(imageQuality: 85, maxWidth: 2000, maxHeight: 2000));
   }
 
   Future<void> _scanReceipt() async {
