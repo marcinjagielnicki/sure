@@ -113,8 +113,9 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
                          amount: BigDecimal("50.00"), entryable: Transaction.new)
     scan = upload("rotated.jpg", "image/jpeg")
     stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    bank.entryable # the matcher hands over this instance, loaded before the other receipt lands
     ReceiptScan::Matcher.any_instance.stubs(:result).returns(ReceiptScan::Matcher::Result.new(kind: :single, entries: [ bank ]))
-    bank.entryable.update!(extra: { "receipt" => { "scan_id" => "other-scan", "merchant" => "First" } })
+    Transaction.find(bank.entryable_id).update!(extra: { "receipt" => { "scan_id" => "other-scan", "merchant" => "First" } })
 
     process(scan)
 
@@ -270,6 +271,32 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
 
     assert scan.reload.failed?
     assert_equal "boom", scan.error
+  end
+
+  test "an error after the scan was flagged still marks it failed" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "10.00", "Food & Drink") ])
+    ReceiptScan::Matcher.any_instance.stubs(:result).raises(StandardError, "boom")
+
+    assert_nothing_raised { process(scan) }
+
+    assert scan.reload.failed?
+    assert_equal "boom", scan.error
+    assert_empty scan.review_reasons
+  end
+
+  test "an error after merging into a bank transaction still marks the scan failed" do
+    Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
+                  amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    placeholder = scan.linked_transaction
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    ReceiptScan::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
+
+    assert_nothing_raised { process(scan) }
+
+    assert scan.reload.failed?
+    assert_equal placeholder, scan.linked_transaction
   end
 
   test "an unreadable currency keeps the account currency" do
