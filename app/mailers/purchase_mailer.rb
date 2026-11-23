@@ -56,9 +56,7 @@ class PurchaseMailer < ApplicationMailer
     end
 
     def purchase_total
-      return "—" if @purchase.total.nil?
-
-      Money.new(@purchase.total, @purchase.currency.presence || @user.family.currency).format
+      @purchase.amount_text(@purchase.total)
     end
 
     def purchase_transaction_entry

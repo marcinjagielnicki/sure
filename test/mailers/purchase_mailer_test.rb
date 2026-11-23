@@ -22,6 +22,14 @@ class PurchaseMailerTest < ActionMailer::TestCase
     assert_includes body, purchase_url(@purchase)
   end
 
+  test "an unknown currency is shown as read, not a crash" do
+    @purchase.update!(currency: "ZL", total: BigDecimal("12.50"))
+
+    mail = PurchaseMailer.with(purchase: @purchase).processed
+
+    assert_includes mail.subject, "12.5 ZL"
+  end
+
   test "processed says it waits for the payment when nothing is linked" do
     purchase = purchases(:allegro_awaiting)
 

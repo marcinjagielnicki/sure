@@ -94,6 +94,23 @@ class Purchase < ApplicationRecord
     (receipt_scan ? receipt_scan.files : receipt_files).attachments.includes(:blob).to_a
   end
 
+  # One of this purchase's amounts as Money, or nil when there's no amount or its currency is one
+  # Money doesn't know (the read flags it as unknown_currency).
+  def money(amount)
+    return if amount.nil?
+
+    Money.new(amount, currency.presence || family.currency)
+  rescue Money::Currency::UnknownCurrencyError
+    nil
+  end
+
+  # The amount formatted in the purchase's currency, or as read ("12.5 ZL") when Money can't.
+  def amount_text(amount, formatter: :format.to_proc)
+    return "—" if amount.nil?
+
+    (money = money(amount)) ? formatter.call(money) : "#{amount.to_d.to_s("F")} #{currency}"
+  end
+
   def categories_held_back?
     Purchase::Linker.new(self).categories_held_back?
   end

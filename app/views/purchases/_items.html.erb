@@ -1,5 +1,4 @@
 <%# locals: (purchase:) %>
-<% currency = purchase.currency.presence || Current.family.currency %>
 <ul class="divide-y divide-subdued">
   <% purchase.items.includes(:category).each do |item| %>
     <% category = item.category || Category.uncategorized %>
@@ -18,7 +17,7 @@
           <% end %>
         </span>
       </span>
-      <span class="shrink-0 text-primary privacy-sensitive"><%= item.amount ? format_money(Money.new(item.amount, currency)) : "—" %></span>
+      <span class="shrink-0 text-primary privacy-sensitive"><%= purchase_amount(purchase, item.amount) %></span>
     </li>
   <% end %>
 </ul>

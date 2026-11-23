@@ -3,8 +3,7 @@ module PurchasesHelper
   def purchase_review_reason(purchase, reason)
     key = reason["reason"].to_s
     if key == "items_mismatch" && reason["items"]
-      currency = purchase.currency.presence || Current.family.currency
-      money = ->(value) { format_money(Money.new(BigDecimal(value.to_s), currency)) }
+      money = ->(value) { purchase_amount(purchase, BigDecimal(value.to_s)) }
       t("purchases.review_reasons.items_mismatch_detail",
         items: money.(reason["items"]), shipping: money.(reason["shipping"]), discount: money.(reason["discount"]),
         expected: money.(reason["expected"]), actual: money.(reason["actual"]))
@@ -18,6 +17,11 @@ module PurchasesHelper
   def purchase_month_title(month)
     names = I18n.t("date.standalone_month_names", default: nil) || I18n.t("date.month_names")
     "#{names[month.month]} #{month.year}"
+  end
+
+  # A purchase amount formatted for the page; an unknown currency shows the amount as read.
+  def purchase_amount(purchase, amount)
+    purchase.amount_text(amount, formatter: ->(money) { format_money(money) })
   end
 
   # The shop's logo: Brandfetch by the shop's domain, else the linked transaction's merchant logo.
