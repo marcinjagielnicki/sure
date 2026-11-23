@@ -11,7 +11,8 @@ RSpec.describe 'API V1 Receipts', type: :request do
       email: 'api-user@example.com',
       password: 'password123',
       password_confirmation: 'password123',
-      role: 'admin'
+      role: 'admin',
+      preferences: { 'preview_features_enabled' => true }
     )
   end
   let(:api_key) do
@@ -67,7 +68,7 @@ RSpec.describe 'API V1 Receipts', type: :request do
         run_test!
       end
 
-      response '403', 'receipt scanning is not available (no AI provider that can read images)' do
+      response '403', 'receipt scanning is not available: preview features off, or no AI provider that can read images' do
         schema '$ref' => '#/components/schemas/ErrorResponse'
         before { allow(ReceiptScan).to receive(:extraction_available?).and_return(false) }
         let(:account_id) { account.id }

@@ -9221,8 +9221,8 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ReceiptScan"
         '403':
-          description: receipt scanning is not available (no AI provider that can
-            read images)
+          description: 'receipt scanning is not available: preview features off, or
+            no AI provider that can read images'
           content:
             application/json:
               schema:

@@ -7,6 +7,7 @@ class Api::V1::ReceiptsControllerTest < ActionDispatch::IntegrationTest
     @admin = users(:family_admin)
     @family = @admin.family
     @account = accounts(:depository)
+    @admin.update!(preferences: @admin.preferences.merge("preview_features_enabled" => true))
 
     @admin.api_keys.active.destroy_all
     @api_key = create_api_key(@admin, "read_write")
@@ -26,6 +27,19 @@ class Api::V1::ReceiptsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :forbidden
     assert_equal "ai_unavailable", JSON.parse(response.body)["error"]
+  end
+
+  test "403 when the user hasn't turned on preview features" do
+    @admin.update!(preferences: @admin.preferences.merge("preview_features_enabled" => false))
+
+    assert_no_difference "ReceiptScan.count" do
+      post api_v1_receipts_url,
+           params: { account_id: @account.id, files: [ receipt_upload ] },
+           headers: api_headers(@api_key)
+    end
+
+    assert_response :forbidden
+    assert_equal "preview_required", JSON.parse(response.body)["error"]
   end
 
   teardown do
