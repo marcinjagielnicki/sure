@@ -51,10 +51,11 @@ class PurchaseInbox::Poller
     ensure
       begin
         Timeout.timeout(logout_timeout) { imap&.logout }
-      rescue Net::IMAP::Error, IOError, Timeout::Error
-        nil
+      rescue Net::IMAP::Error, IOError, SystemCallError, OpenSSL::SSL::SSLError, Timeout::Error
+        nil # the connection is going away either way
+      ensure
+        imap&.disconnect
       end
-      imap&.disconnect
     end
 
     def session_timeout = SESSION_TIMEOUT

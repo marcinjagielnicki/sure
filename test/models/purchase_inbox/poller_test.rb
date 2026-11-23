@@ -103,6 +103,15 @@ class PurchaseInbox::PollerTest < ActiveSupport::TestCase
     assert_includes imap.calls, [ :disconnect ]
   end
 
+  test "a broken connection at logout still disconnects" do
+    imap = FakeImap.new(messages: {})
+    def imap.logout = raise(Errno::EPIPE)
+
+    poll(imap)
+
+    assert_includes imap.calls, [ :disconnect ]
+  end
+
   test "skips and marks seen a message that's too large" do
     imap = FakeImap.new(messages: { 7 => "x" * (PurchaseInbox::Poller::MAX_BYTES + 1) })
 
