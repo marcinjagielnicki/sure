@@ -31,7 +31,7 @@ pl:
         require_sender_auth: Weryfikuj nadawców
         require_sender_auth_hint: Przyjmuj mail tylko wtedy, gdy Twój serwer poczty potwierdził domenę nadawcy (DMARC lub DKIM).
         authserv_id: Zaufany serwer poczty
-        authserv_id_hint: Nazwa, którą Twój serwer poczty wpisuje w Authentication-Results, np. mx.google.com. Przetestuj połączenie, aby zobaczyć nazwy z ostatniego maila.
+        authserv_id_hint: "Nazwa, którą Twój serwer poczty wpisuje w Authentication-Results, np. mx.google.com. Przetestuj połączenie, aby zobaczyć nazwy z ostatniego maila. Weryfikacja jest tak pewna jak ten serwer: musi on dopisywać własny Authentication-Results nad otrzymanymi, usuwać otrzymane z jego nazwą i ustawiać Delivered-To przy doręczeniu (Gmail i Microsoft 365 to robią). Nie polegaj na niej z serwerem, który tego nie robi."
         save: Zapisz
         test_connection: Testuj połączenie
       routes:
