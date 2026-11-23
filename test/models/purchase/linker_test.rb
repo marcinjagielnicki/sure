@@ -194,6 +194,15 @@ class Purchase::LinkerTest < ActiveSupport::TestCase
     assert_includes @purchase.review_reasons.map { _1["reason"] }, "too_many_attachments"
   end
 
+  test "a purchase already linked to another transaction can't be linked again" do
+    @purchase.link!(@entry)
+    other = create_transaction(account: accounts(:depository), amount: 100, date: Date.current, name: "Allegro again")
+
+    assert_raises(Purchase::LinkError) { @purchase.link!(other, manual: true) }
+    assert_equal @entry.entryable, @purchase.reload.linked_transaction
+    assert_nil other.entryable.reload.extra["purchase"]
+  end
+
   test "an already split transaction is linked without changes" do
     @entry.split!([ { name: "A", amount: 50, category_id: nil }, { name: "B", amount: 50, category_id: nil } ])
 

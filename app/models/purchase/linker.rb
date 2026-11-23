@@ -17,6 +17,10 @@ class Purchase::Linker
       purchase.lock!
       existing = Purchase.where(transaction_id: transaction.id).where.not(id: purchase.id)
       raise Purchase::LinkError, "The transaction already belongs to another purchase" if existing.exists?
+      # Linking elsewhere would leave the first transaction carrying this purchase: unlink first.
+      if purchase.transaction_id.present? && purchase.transaction_id != transaction.id
+        raise Purchase::LinkError, "The purchase is already linked to another transaction"
+      end
 
       purchase.update!(
         linked_transaction: transaction,
