@@ -37,6 +37,23 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     end
   end
 
+  test "a scan whose reading can't be queued is marked failed instead of processing forever" do
+    ReceiptScan::ProcessJob.stubs(:perform_later).returns(false)
+
+    scan = upload("rotated.jpg", "image/jpeg")
+
+    assert scan.reload.failed?
+    assert_equal "needs_review", scan.linked_transaction.extra.dig("receipt", "status")
+  end
+
+  test "a queueing error also marks the scan failed" do
+    ReceiptScan::ProcessJob.stubs(:perform_later).raises(RedisClient::CannotConnectError)
+
+    scan = upload("rotated.jpg", "image/jpeg")
+
+    assert scan.reload.failed?
+  end
+
   test "rejects txt" do
     assert_raises(ReceiptScan::InvalidUpload) do
       ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,

@@ -40,6 +40,12 @@ class ReceiptScan::Processor
     record_failure(e)
   end
 
+  # Ends a scan that won't be read as failed (e.g. its job couldn't be queued).
+  def fail!(error)
+    @placeholder = scan.linked_transaction
+    record_failure(error)
+  end
+
   private
     attr_reader :scan, :extraction, :problems, :placeholder
 

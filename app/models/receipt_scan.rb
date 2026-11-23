@@ -59,11 +59,24 @@ class ReceiptScan < ApplicationRecord
         scan
       end
 
-      ReceiptScan::ProcessJob.perform_later(scan)
+      enqueue_processing(scan)
       scan
     end
 
     private
+      # A scan nothing will read would stay "processing" forever: end it as failed, so the user
+      # sees it and can try again.
+      def enqueue_processing(scan)
+        error = nil
+        enqueued = begin
+          ReceiptScan::ProcessJob.perform_later(scan)
+        rescue StandardError => e
+          error = e
+          false
+        end
+        ReceiptScan::Processor.new(scan).fail!(error || StandardError.new("The receipt couldn't be queued for reading")) unless enqueued
+      end
+
       def normalize_uploads!(uploads)
         raise InvalidUpload, I18n.t("receipt_scans.errors.no_files") if uploads.empty?
         raise InvalidUpload, I18n.t("receipt_scans.errors.too_many_files", count: MAX_FILES) if uploads.size > MAX_FILES
