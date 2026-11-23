@@ -38,6 +38,14 @@ class PurchaseMailerTest < ActionMailer::TestCase
     assert_includes body, I18n.t("purchase_mailer.processed.waiting")
   end
 
+  test "a transaction on an account the owner can no longer see is left out" do
+    Account.stubs(:accessible_by).returns(Account.none)
+
+    body = PurchaseMailer.with(purchase: @purchase).matched.text_part.body.decoded
+
+    refute_includes body, "Starbucks"
+  end
+
   test "matched names the transaction" do
     body = PurchaseMailer.with(purchase: @purchase).matched.text_part.body.decoded
 

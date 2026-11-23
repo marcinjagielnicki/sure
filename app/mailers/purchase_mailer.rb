@@ -59,7 +59,10 @@ class PurchaseMailer < ApplicationMailer
       @purchase.amount_text(@purchase.total)
     end
 
+    # Only while the owner can still see its account: mail goes out later, and access may have
+    # been taken away since the link.
     def purchase_transaction_entry
-      @purchase.linked_transaction&.entry
+      entry = @purchase.linked_transaction&.entry
+      entry if entry && Account.accessible_by(@purchase.user).exists?(id: entry.account_id)
     end
 end
