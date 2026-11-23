@@ -126,8 +126,15 @@ class Purchase < ApplicationRecord
   def reprocess!
     return unless failed? && email?
 
+    previous_error = error
     update!(status: :processing, error: nil)
-    Purchase::EmailProcessJob.perform_later(self)
+    begin
+      Purchase::EmailProcessJob.perform_later(self)
+    rescue StandardError
+      # Left processing with no job, it could never be retried.
+      update!(status: :failed, error: previous_error)
+      raise
+    end
   end
 
   # Re-checks the stored AI read against the current total rules, without calling the AI again.

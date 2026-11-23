@@ -187,8 +187,19 @@ class Purchase::EmailProcessor
       }
     end
 
+    # What was read is already saved: a notice that can't be queued is logged, not a failure.
     def notify(outcome)
       PurchaseMailer.with(purchase:).public_send(outcome).deliver_later
+    rescue StandardError => e
+      DebugLogEntry.capture(
+        category: "purchase_inbox",
+        level: "warn",
+        message: "Couldn't queue the #{outcome} email for a purchase: #{e.message}",
+        source: self.class.name,
+        family:,
+        user: purchase.user,
+        metadata: { purchase_id: purchase.id, error_class: e.class.name }
+      )
     end
 
     def record_failure(error)

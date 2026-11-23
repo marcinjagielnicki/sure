@@ -117,6 +117,34 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_nil @purchase.match_deadline_on
   end
 
+  test "a failed read that can't be queued again stays failed" do
+    @purchase.update!(status: :failed, error: "timeout")
+    Purchase::EmailProcessJob.stubs(:perform_later).raises(RedisClient::CannotConnectError)
+
+    assert_raises(RedisClient::CannotConnectError) { @purchase.reprocess! }
+    assert @purchase.reload.failed?
+    assert_equal "timeout", @purchase.error
+  end
+
+  test "a notification that can't be sent doesn't fail a purchase that was read" do
+    stub_purchase_provider
+    ActionMailer::MessageDelivery.any_instance.stubs(:deliver_later).raises(RedisClient::CannotConnectError)
+
+    process
+
+    assert_equal "awaiting_payment", @purchase.reload.status
+  end
+
+  test "a user-excluded transaction isn't offered as the payment" do
+    entry = payment(date: @ordered_on + 1.day)
+    entry.update!(excluded: true)
+    stub_purchase_provider
+
+    process
+
+    assert_nil @purchase.reload.linked_transaction
+  end
+
   test "no candidate leaves it awaiting payment with a deadline" do
     stub_purchase_provider
 
