@@ -120,7 +120,15 @@ class ReceiptScan::Processor
       end
     end
 
+    # Holds the bank entry's lock until the scan's work commits, so two scans that both picked it
+    # don't both merge: the second sees the first one's receipt and keeps its placeholder.
     def merge_into(bank_transaction)
+      bank_transaction.lock!
+      if bank_transaction.extra["receipt"].present?
+        scan.flag!(:duplicate_receipt, entry_id: bank_transaction.entry.id)
+        return placeholder
+      end
+
       if bank_transaction.attachments.count + scan.files.count > Transaction::MAX_ATTACHMENTS_PER_TRANSACTION
         scan.flag!(:too_many_attachments, entry_id: bank_transaction.entry.id)
         return placeholder

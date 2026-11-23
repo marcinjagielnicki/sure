@@ -106,6 +106,23 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_equal @food, bank.entryable.category
   end
 
+  # Two scans can pick the same bank entry before either has merged: the second must
+  # see the first one's receipt once it holds the entry's lock.
+  test "a bank transaction another receipt merged into meanwhile isn't taken twice" do
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date + 1.day, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    ReceiptScan::Matcher.any_instance.stubs(:result).returns(ReceiptScan::Matcher::Result.new(kind: :single, entries: [ bank ]))
+    bank.entryable.update!(extra: { "receipt" => { "scan_id" => "other-scan", "merchant" => "First" } })
+
+    process(scan)
+
+    assert_equal "First", bank.entryable.reload.extra.dig("receipt", "merchant")
+    assert_not_equal bank.entryable, scan.reload.linked_transaction
+    assert_includes scan.review_reasons.map { _1["reason"] }, "duplicate_receipt"
+  end
+
   test "merges into a pending bank transaction and defers the split" do
     pending = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
                             amount: BigDecimal("50.00"), entryable: Transaction.new(extra: { "plaid" => { "pending" => true } }))
