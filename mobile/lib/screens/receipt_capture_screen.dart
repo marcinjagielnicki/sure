@@ -104,7 +104,19 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
   }
 
   Future<void> _chooseFromGallery() async {
-    _addPhotos(await _pickFromGallery());
+    final List<XFile> picked;
+    try {
+      picked = await _pickFromGallery();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(AppLocalizations.of(context)
+                .receiptGalleryFailed(error.toString()))),
+      );
+      return;
+    }
+    _addPhotos(picked);
   }
 
   void _addPhotos(List<XFile> picked) {
@@ -136,7 +148,8 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
       await PreferencesService.instance.setLastReceiptAccountId(accountId);
 
       messenger.showSnackBar(SnackBar(content: Text(l.receiptUploaded)));
-      if (navigator.canPop()) navigator.pop(true);
+      // The screen may have been closed during the upload; its navigator is then stale.
+      if (mounted && navigator.canPop()) navigator.pop(true);
     } catch (error) {
       messenger.showSnackBar(
           SnackBar(content: Text(l.receiptUploadFailed(error.toString()))));

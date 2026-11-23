@@ -1223,6 +1223,11 @@
     "description": "Shown when the document scanner cannot be opened.",
     "placeholders": { "message": { "type": "String" } }
   },
+  "receiptGalleryFailed": "Couldn't open your photos: {message}",
+  "@receiptGalleryFailed": {
+    "description": "Shown when the photo gallery cannot be opened.",
+    "placeholders": { "message": { "type": "String" } }
+  },
   "receiptUploadFailed": "Couldn't upload the receipt: {message}",
   "@receiptUploadFailed": {
     "description": "Error shown when a receipt upload fails.",

@@ -2330,6 +2330,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t open the scanner: {message}'**
   String receiptScannerFailed(String message);
 
+  /// Shown when the photo gallery cannot be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open your photos: {message}'**
+  String receiptGalleryFailed(String message);
+
   /// Error shown when a receipt upload fails.
   ///
   /// In en, this message translates to:
