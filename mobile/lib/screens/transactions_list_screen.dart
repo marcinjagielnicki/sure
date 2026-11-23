@@ -433,7 +433,10 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
           ),
         ))
         .then((_) {
-      if (mounted) _loadTransactions(forceSync: true);
+      if (!mounted) return;
+      // A new receipt gets its own polling window, even after an earlier one ran out.
+      _receiptPollStarted = null;
+      _loadTransactions(forceSync: true);
     });
   }
 
