@@ -941,7 +941,10 @@ class Account::ProviderImportAdapter
       .where(currency: currency)
       .where(date: (date - date_window.days)..date) # Pending must be ON or BEFORE posted date
       .where(Transaction.pending_sql("transactions"))
-      .where(excluded: false)
+      # A split parent is always excluded (its parts carry the amounts), so its
+      # exclusion says nothing about whether the pending is stale: a receipt split
+      # by category while pending must still be claimable by its booking.
+      .where("entries.excluded = FALSE OR EXISTS (SELECT 1 FROM entries parts WHERE parts.parent_entry_id = entries.id)")
       .limit(2)
       .to_a
 
