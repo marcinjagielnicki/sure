@@ -1066,8 +1066,7 @@ RSpec.configure do |config|
                 items: { '$ref' => '#/components/schemas/Tag' }
               },
               transfer: { '$ref' => '#/components/schemas/Transfer', nullable: true },
-              # OpenAPI 3.0 ignores nullable beside $ref, so it wraps the reference.
-              receipt: { nullable: true, allOf: [ { '$ref' => '#/components/schemas/TransactionReceipt' } ] },
+              receipt: { '$ref' => '#/components/schemas/TransactionReceipt' },
               attachments: {
                 type: :array,
                 items: { '$ref' => '#/components/schemas/TransactionAttachment' }
@@ -1078,7 +1077,8 @@ RSpec.configure do |config|
           },
           TransactionReceipt: {
             type: :object,
-            description: 'The receipt this transaction was created from or matched to.',
+            nullable: true,
+            description: 'The receipt this transaction was created from or matched to; null when there is none.',
             required: %w[status review_reasons line_items],
             properties: {
               scan_id: { type: :string, format: :uuid, nullable: true },

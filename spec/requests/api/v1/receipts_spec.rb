@@ -33,7 +33,7 @@ RSpec.describe 'API V1 Receipts', type: :request do
 
   path '/api/v1/receipts' do
     post 'Upload a receipt' do
-      description 'Uploads up to 5 photos or a PDF of one receipt, bill or invoice (10 MB each; JPEG, PNG, WebP, HEIC, PDF) ' \
+      description 'Uploads up to 5 photos, or one PDF on its own, of one receipt, bill or invoice (10 MB each; JPEG, PNG, WebP, HEIC, PDF) ' \
                   'for an account the caller can write to. A "Processing receipt…" transaction is created at once; the receipt ' \
                   'is then read in the background, the transaction filled in and split by category, or the receipt attached to ' \
                   'an existing bank transaction for the same payment. Poll the receipt for its status.'
@@ -47,12 +47,12 @@ RSpec.describe 'API V1 Receipts', type: :request do
                 description: 'Receipt photos or PDF, as files[]',
                 schema: {
                   type: :object,
-                  required: %w[account_id files],
+                  required: %w[account_id files[]],
                   properties: {
                     account_id: { type: :string, format: :uuid, description: 'Account the receipt was paid from (needs write access to it)' },
-                    files: {
+                    'files[]': {
                       type: :array, minItems: 1, maxItems: 5,
-                      description: 'Photos or a PDF of one receipt, 10 MB each (JPEG, PNG, WebP, HEIC, PDF)',
+                      description: 'Up to 5 photos, or one PDF, of one receipt, 10 MB each (JPEG, PNG, WebP, HEIC, PDF). Send each file as a files[] part.',
                       items: { type: :string, format: :binary }
                     }
                   }
