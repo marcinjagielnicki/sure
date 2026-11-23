@@ -65,6 +65,20 @@ class ReceiptScan::Processor
 
       scan.update!(status: :completed) if scan.processing?
       write_receipt_extra(transaction)
+      record_purchase
+    end
+
+    def record_purchase
+      metadata = {
+        "provider" => provider.class.name.demodulize.underscore,
+        "model" => provider.try(:default_model),
+        "prompt_version" => Provider::Anthropic::ReceiptExtractor::PROMPT_VERSION,
+        "extracted_at" => Time.current.iso8601,
+        "raw_output" => extraction.to_h.as_json,
+        "validation" => problems
+      }
+      scan.update!(extraction: metadata)
+      Purchase::FromReceiptScan.sync!(scan.reload, extraction_hash: metadata["raw_output"], ai_metadata: metadata)
     end
 
     def provider
@@ -177,7 +191,7 @@ class ReceiptScan::Processor
       return if extraction.total.nil? || entry.amount != extraction.total
       return if entry.entryable.category_set_by_user?
 
-      groups = ReceiptScan::CategoryAllocator.new(extraction, categories: family.categories).groups
+      groups = Purchase::CategoryAllocator.new(total: extraction.total, items: extraction.line_items, categories: family.categories).groups
       if groups.one?
         entry.entryable.update!(category: groups.first[:category]) if groups.first[:category]
       elsif groups.many? && entry.entryable.pending?

@@ -6,6 +6,8 @@ class Provider::Anthropic::ReceiptExtractor
   include Provider::Anthropic::Concerns::StructuredOutput
 
   TOOL_NAME = "report_receipt".freeze
+  # Recorded with each purchase, so results can be compared after the prompt changes.
+  PROMPT_VERSION = "2026-11-16".freeze
   OPERATION = "extract_receipt".freeze
   # Same request budget as PdfProcessor: files travel base64-encoded (~4/3 larger) inside a
   # 32 MB request body next to the prompt and schema.
