@@ -13,14 +13,35 @@ class PurchasesMailbox < ApplicationMailbox
       return reject!("preview_required", from: resolver.from_address, user:)
     end
 
-    purchase = Purchase.create!(
-      family: user.family, user:, source: :email, status: :processing, inbound_email_message_id: mail.message_id
-    )
-    purchase.original_email.attach(io: StringIO.new(inbound_email.source), filename: "order.eml", content_type: "message/rfc822")
-    Purchase::EmailProcessJob.perform_later(purchase)
+    # Created with its original or not at all, so a retry of this email doesn't leave a
+    # purchase behind that nothing will read.
+    purchase = Purchase.transaction do
+      Purchase.create!(
+        family: user.family, user:, source: :email, status: :processing, inbound_email_message_id: mail.message_id
+      ).tap do |created|
+        created.original_email.attach(io: StringIO.new(inbound_email.source), filename: "order.eml", content_type: "message/rfc822")
+      end
+    end
+    start_reading(purchase)
   end
 
   private
+    # A purchase whose job can't be queued is failed rather than left processing, so the user
+    # can read it again from its page.
+    def start_reading(purchase)
+      Purchase::EmailProcessJob.perform_later(purchase)
+    rescue StandardError => e
+      purchase.update!(status: :failed, error: "The email couldn't be queued for reading: #{e.message}")
+      DebugLogEntry.capture(
+        category: "purchase_inbox",
+        level: "error",
+        message: "Couldn't queue a forwarded order email for reading: #{e.message}",
+        source: self.class.name,
+        user: purchase.user,
+        metadata: { purchase_id: purchase.id, inbound_email_id: inbound_email.id, error_class: e.class.name }
+      )
+    end
+
     def reject!(reason, from:, user: nil)
       DebugLogEntry.capture(
         category: "purchase_inbox",

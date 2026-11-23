@@ -30,6 +30,26 @@ class PurchasesMailboxTest < ActionMailbox::TestCase
     assert_includes purchase.original_email.download, "Order Total: $249.99"
   end
 
+  test "an email whose original can't be stored leaves no purchase behind" do
+    ActiveStorage::Attached::One.any_instance.stubs(:attach).raises(ActiveStorage::IntegrityError)
+
+    assert_no_difference "Purchase.count" do
+      assert_raises(ActiveStorage::IntegrityError) do
+        receive_inbound_email_from_source(fixture("amazon_manual_forward.eml"))
+      end
+    end
+  end
+
+  test "a purchase whose reading can't be queued is failed, so it can be read again" do
+    Purchase::EmailProcessJob.stubs(:perform_later).raises(RedisClient::CannotConnectError)
+
+    receive_inbound_email_from_source(fixture("amazon_manual_forward.eml"))
+
+    purchase = Purchase.order(:created_at).last
+    assert purchase.failed?
+    assert purchase.original_email.attached?
+  end
+
   test "an automatically forwarded order to a plus address is accepted" do
     assert_difference -> { Purchase.count }, 1 do
       receive_inbound_email_from_source(fixture("amazon_auto_forward.eml"))
