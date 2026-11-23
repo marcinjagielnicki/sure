@@ -1150,6 +1150,10 @@ class UserTest < ActiveSupport::TestCase
     assert_nil loses_link.linked_transaction
     assert_equal source_family, others.reload.family
     assert_nil others.linked_transaction
+    visible = Purchase.visible_to(user.reload).where(family: new_family)
+    assert_includes visible, stays_linked
+    assert_includes visible, loses_link
+    assert_not_includes Purchase.visible_to(users(:family_admin)), loses_link
   end
 
   test "transfer_to_family! moves unmapped FinanceKit items owned by the user" do
