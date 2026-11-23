@@ -45,6 +45,9 @@ class ReceiptCaptureScreen extends StatefulWidget {
 class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
   final List<XFile> _photos = [];
   String? _accountId;
+  // Set once the user picks an account, so the remembered one, read
+  // asynchronously, doesn't replace their choice.
+  bool _accountPicked = false;
   bool _uploading = false;
   late final ReceiptsService _service = widget.service ?? ReceiptsService();
 
@@ -58,7 +61,7 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
       return;
     }
     PreferencesService.instance.getLastReceiptAccountId().then((lastId) {
-      if (!mounted || lastId == null) return;
+      if (!mounted || lastId == null || _accountPicked) return;
       if (widget.accounts.any((account) => account.id == lastId)) {
         setState(() => _accountId = lastId);
       }
@@ -231,7 +234,10 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
               ],
               onChanged: _uploading
                   ? null
-                  : (value) => setState(() => _accountId = value),
+                  : (value) => setState(() {
+                        _accountPicked = true;
+                        _accountId = value;
+                      }),
             ),
             const SizedBox(height: 24),
             FilledButton(
