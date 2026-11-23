@@ -1898,6 +1898,25 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "a split receipt claimed while pending stops being pending when booked under the same id" do
+    receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
+    receipt.split!([ { name: "Food", amount: 41.37, category_id: nil }, { name: "Home", amount: 20, category_id: nil } ])
+    @adapter.import_transaction(
+      external_id: "simplefin_same_id", amount: 61.37, currency: "USD", date: Date.current - 2.days,
+      name: "CARD CORNER GROCER", source: "simplefin", extra: { "simplefin" => { "pending" => true } }
+    )
+
+    booked = @adapter.import_transaction(
+      external_id: "simplefin_same_id", amount: 61.37, currency: "USD", date: Date.current,
+      name: "CARD CORNER GROCER", source: "simplefin", extra: { "simplefin" => { "pending" => false } }
+    )
+
+    assert_equal receipt.id, booked.id
+    assert_not booked.reload.transaction.pending?
+    assert booked.excluded?
+    assert_equal 2, booked.child_entries.count
+  end
+
   test "a split receipt claimed while pending reconciles with its booked version" do
     receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
     receipt.split!([ { name: "Food", amount: 41.37, category_id: nil }, { name: "Home", amount: 20, category_id: nil } ])

@@ -80,13 +80,15 @@ class Account::ProviderImportAdapter
           # for pending and booked, so the entry is found by external_id rather than going
           # through the auto-claim path. Without this, a user who categorised a pending entry
           # (setting user_modified=true) would see the pending badge stuck forever.
-          # Excluded and import_locked entries are intentionally left untouched.
+          # Excluded and import_locked entries are intentionally left untouched, except a
+          # split parent: it is excluded because its parts carry the amounts, not by the user.
           #
           # Load-bearing even though the namespace refresh below usually rewrites the
           # same branch: an entry that is both user_modified and import_locked reaches
           # here (determine_skip_reason reports user_modified first) but is excluded
           # from that refresh, so this is the only thing that clears its pending flag.
-          if skip_reason == "user_modified" && !incoming_pending && entry.entryable.is_a?(Transaction)
+          clears_pending = skip_reason == "user_modified" || (skip_reason == "excluded" && entry.split_parent?)
+          if clears_pending && !incoming_pending && entry.entryable.is_a?(Transaction)
             if entry.transaction.pending?
               entry.transaction.update!(extra: clear_pending_flags_from_extra(entry.transaction.extra))
             end
