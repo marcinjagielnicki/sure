@@ -1873,6 +1873,18 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_not_equal receipt.id, entry.id
   end
 
+  test "a bank charge does not claim a receipt paid in cash" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    receipt.entryable.update!(extra: { "receipt" => { "status" => "completed", "payment_method" => "cash" } })
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_cash", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD OTHER SHOP", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+  end
+
   test "a zero amount booking does not claim a receipt that was never read" do
     failed = @account.entries.create!(
       date: Date.current, amount: 0, currency: "USD", name: "Processing receipt…",

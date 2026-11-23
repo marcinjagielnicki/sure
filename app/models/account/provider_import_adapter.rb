@@ -918,7 +918,8 @@ class Account::ProviderImportAdapter
   # the entry) so a pending claim can still reconcile with its booked version.
   #
   # A zero amount never matches: that is a placeholder whose receipt was never read. Entries the
-  # user excluded don't either, except a split parent, which is always excluded.
+  # user excluded don't either, except a split parent, which is always excluded, nor receipts
+  # paid in cash.
   def find_receipt_transaction(date:, amount:, currency:, date_window: ReceiptScan::MATCH_DATE_WINDOW)
     date = Date.parse(date.to_s) unless date.is_a?(Date)
     return if amount.to_d.zero?
@@ -930,6 +931,8 @@ class Account::ProviderImportAdapter
       .where("transactions.extra ? 'receipt'")
       .where("transactions.extra -> 'receipt' ->> 'status' IS DISTINCT FROM 'processing'")
       .where("entries.excluded = FALSE OR EXISTS (SELECT 1 FROM entries parts WHERE parts.parent_entry_id = entries.id)")
+      # Paid in cash: a bank charge of the same amount is another expense.
+      .where("transactions.extra -> 'receipt' ->> 'payment_method' IS DISTINCT FROM 'cash'")
       .to_a
       .min_by { |entry| [ (entry.date - date).abs, entry.created_at ] }
   end
