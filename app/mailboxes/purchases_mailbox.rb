@@ -13,19 +13,63 @@ class PurchasesMailbox < ApplicationMailbox
       return reject!("preview_required", from: resolver.from_address, user:)
     end
 
-    # Created with its original or not at all, so a retry of this email doesn't leave a
-    # purchase behind that nothing will read.
-    purchase = Purchase.transaction do
-      Purchase.create!(
-        family: user.family, user:, source: :email, status: :processing, inbound_email_message_id: mail.message_id
-      ).tap do |created|
-        created.original_email.attach(io: StringIO.new(inbound_email.source), filename: "order.eml", content_type: "message/rfc822")
-      end
+    # The same email routed again (Action Mailbox retries a failed one) reuses its purchase; one
+    # that was read already is left alone.
+    purchase = previous_purchase(user)
+    if purchase
+      return unless purchase.processing? || purchase.failed?
+
+      store_original(purchase) unless purchase.original_email.attached?
+      purchase.update!(status: :processing, error: nil)
+    else
+      purchase = create_purchase(user)
     end
     start_reading(purchase)
   end
 
   private
+    def previous_purchase(user)
+      return if mail.message_id.blank?
+
+      Purchase.email.find_by(user:, inbound_email_message_id: mail.message_id)
+    end
+
+    # Created with its original or not at all, so a retry of this email doesn't leave a
+    # purchase behind that nothing will read.
+    def create_purchase(user)
+      purchase = nil
+      store_original_failing(-> { purchase }) do
+        Purchase.transaction do
+          purchase = Purchase.create!(
+            family: user.family, user:, source: :email, status: :processing, inbound_email_message_id: mail.message_id
+          )
+          attach_original(purchase)
+        end
+      end
+      purchase
+    end
+
+    def store_original(purchase)
+      store_original_failing(-> { purchase }) { attach_original(purchase) }
+    end
+
+    def attach_original(purchase)
+      purchase.original_email.attach(io: StringIO.new(inbound_email.source), filename: "order.eml", content_type: "message/rfc822")
+    end
+
+    # Active Storage uploads the original after the commit. When that fails the purchase exists
+    # without it: it's marked failed and the error re-raised, so Action Mailbox keeps the email
+    # failed and routing it again stores the original and reads it.
+    def store_original_failing(purchase)
+      yield
+    rescue StandardError => e
+      saved = purchase.call
+      if saved&.persisted? && Purchase.exists?(saved.id)
+        saved.update!(status: :failed, error: "The original email couldn't be stored: #{e.message}")
+      end
+      raise
+    end
+
     # A purchase whose job can't be queued is failed rather than left processing, so the user
     # can read it again from its page.
     def start_reading(purchase)

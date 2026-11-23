@@ -40,6 +40,35 @@ class PurchasesMailboxTest < ActionMailbox::TestCase
     end
   end
 
+  test "routing the same email again reuses its purchase" do
+    inbound = receive_inbound_email_from_source(fixture("amazon_manual_forward.eml"))
+
+    assert_no_difference "Purchase.count" do
+      inbound.pending!
+      inbound.route
+    end
+    assert_equal 1, Purchase.where(inbound_email_message_id: inbound.message_id).count
+  end
+
+  test "an original whose upload fails after the commit fails the purchase, and routing again recovers it" do
+    inbound = create_inbound_email_from_source(fixture("amazon_manual_forward.eml"))
+    ActiveStorage::Attached::Changes::CreateOne.any_instance.stubs(:upload).raises(StandardError, "storage down")
+
+    assert_raises(StandardError) { inbound.route }
+    purchase = Purchase.find_by!(inbound_email_message_id: inbound.message_id)
+    assert purchase.failed?
+    assert_match "storage down", purchase.error
+
+    ActiveStorage::Attached::Changes::CreateOne.any_instance.unstub(:upload)
+    assert_enqueued_with(job: Purchase::EmailProcessJob) do
+      inbound.reload.pending!
+      inbound.route
+    end
+    assert purchase.reload.processing?
+    assert purchase.original_email.attached?
+    assert_equal 1, Purchase.where(inbound_email_message_id: inbound.message_id).count
+  end
+
   test "a purchase whose reading can't be queued is failed, so it can be read again" do
     Purchase::EmailProcessJob.stubs(:perform_later).raises(RedisClient::CannotConnectError)
 
