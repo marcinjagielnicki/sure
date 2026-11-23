@@ -132,8 +132,8 @@ class Setting < RailsSettings::Base
   # Order mailbox (IMAP) that forwarded shop emails are read from. See PurchaseInbox.
   field :purchase_inbox_enabled, type: :boolean, default: false
   field :purchase_inbox_host, type: :string, default: ENV["PURCHASE_INBOX_IMAP_HOST"]
-  field :purchase_inbox_port, type: :integer, default: ENV.fetch("PURCHASE_INBOX_IMAP_PORT", 993).to_i
-  field :purchase_inbox_ssl, type: :boolean, default: ENV.fetch("PURCHASE_INBOX_IMAP_SSL", "true") == "true"
+  field :purchase_inbox_port, type: :integer, default: PurchaseInbox.env_port(ENV["PURCHASE_INBOX_IMAP_PORT"])
+  field :purchase_inbox_ssl, type: :boolean, default: PurchaseInbox.env_ssl(ENV["PURCHASE_INBOX_IMAP_SSL"])
   field :purchase_inbox_username, type: :string, default: ENV["PURCHASE_INBOX_IMAP_USERNAME"]
   field :purchase_inbox_password, type: :string, default: ENV["PURCHASE_INBOX_IMAP_PASSWORD"]
   field :purchase_inbox_folder, type: :string, default: ENV.fetch("PURCHASE_INBOX_IMAP_FOLDER", "INBOX")
