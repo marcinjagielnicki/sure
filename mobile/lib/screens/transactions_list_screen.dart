@@ -77,7 +77,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
 
     _receiptPoll?.cancel();
     _receiptPoll = Timer(_receiptPollInterval, () {
-      if (mounted) _loadTransactions();
+      if (mounted) _loadTransactions(forceSync: true);
     });
   }
 
@@ -149,7 +149,9 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
     ).toList();
   }
 
-  Future<void> _loadTransactions() async {
+  // forceSync: fetch from the server even when transactions are cached, for refreshes that
+  // wait on the server (a receipt being read, one just uploaded).
+  Future<void> _loadTransactions({bool forceSync = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final transactionsProvider = Provider.of<TransactionsProvider>(context, listen: false);
 
@@ -169,6 +171,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
     await transactionsProvider.fetchTransactions(
       accessToken: accessToken,
       accountId: widget.account.id,
+      forceSync: forceSync,
     );
     if (mounted) _scheduleReceiptPoll();
   }
@@ -430,7 +433,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> {
           ),
         ))
         .then((_) {
-      if (mounted) _loadTransactions();
+      if (mounted) _loadTransactions(forceSync: true);
     });
   }
 
