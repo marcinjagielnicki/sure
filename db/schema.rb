@@ -2095,7 +2095,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
   create_table "receipt_scans", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "family_id", null: false
     t.uuid "account_id", null: false
-    t.uuid "user_id", null: false
+    t.uuid "user_id"
     t.uuid "transaction_id"
     t.string "status", default: "processing", null: false
     t.jsonb "extraction", default: {}, null: false
@@ -3317,7 +3317,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
   add_foreign_key "receipt_scans", "accounts"
   add_foreign_key "receipt_scans", "families"
   add_foreign_key "receipt_scans", "transactions", on_delete: :nullify
-  add_foreign_key "receipt_scans", "users"
+  add_foreign_key "receipt_scans", "users", on_delete: :nullify
   add_foreign_key "recurrence_rules", "recurring_transactions", on_delete: :cascade
   add_foreign_key "recurring_allocations", "entries", on_delete: :nullify
   add_foreign_key "recurring_allocations", "recurring_occurrences", column: ["recurring_occurrence_id", "currency"], primary_key: ["id", "currency"], name: "fk_recurring_allocations_currency_matches_occurrence", on_delete: :cascade

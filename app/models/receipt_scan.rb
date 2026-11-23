@@ -9,7 +9,8 @@ class ReceiptScan < ApplicationRecord
 
   belongs_to :family
   belongs_to :account
-  belongs_to :user
+  # Who uploaded it; nil once that member is removed.
+  belongs_to :user, optional: true
   # Not `:transaction`: that name would shadow ActiveRecord::Base#transaction.
   belongs_to :linked_transaction, class_name: "Transaction", foreign_key: :transaction_id, optional: true
 

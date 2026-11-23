@@ -27,6 +27,16 @@ class ReceiptScanTest < ActiveSupport::TestCase
     assert scan.errors.of_kind?(:account, :invalid)
   end
 
+  test "a scan outlives the member who uploaded it" do
+    member = users(:family_member)
+    scan = ReceiptScan.create!(family: @family, user: member, account: @account)
+
+    member.destroy!
+
+    assert_nil scan.reload.user
+    assert_equal @account, scan.account
+  end
+
   test "starts processing" do
     scan = ReceiptScan.create!(family: @family, user: @user, account: @account)
 
