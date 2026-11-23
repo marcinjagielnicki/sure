@@ -89,4 +89,17 @@ void main() {
     });
     expect(stored.mergeServerTransaction(read, accountId: 'acct_1').toTransaction().receiptStatus, 'completed');
   });
+
+  test('a locally applied edit keeps the receipt', () {
+    final fromServer = Transaction.fromJson({
+      ...base(),
+      'receipt': {'status': 'completed', 'review_reasons': [], 'line_items': []},
+    });
+
+    final edited = OfflineTransaction.fromTransaction(fromServer, localId: 'local_1')
+        .toTransactionWithSubmittedUpdate(name: 'Grocer');
+
+    expect(edited.name, 'Grocer');
+    expect(edited.receiptStatus, 'completed');
+  });
 }
