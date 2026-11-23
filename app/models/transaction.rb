@@ -797,6 +797,17 @@ class Transaction < ApplicationRecord
 
       new_tags = from.tags.where.not(id: to.tags.select(:id))
       to.tags << new_tags if new_tags.any?
+
+      carry_over_receipt(from:, to:)
+    end
+
+    # A receipt read onto the pending transaction moves with its scan, unless the posted one
+    # already has a receipt of its own, which is kept.
+    def carry_over_receipt(from:, to:)
+      return if from.extra["receipt"].blank? || to.extra["receipt"].present?
+
+      to.update!(extra: to.extra.merge("receipt" => from.extra["receipt"]))
+      ReceiptScan.where(transaction_id: from.id).update_all(transaction_id: to.id, updated_at: Time.current)
     end
 
     def attachment_count_after_merge(from:, to:)
