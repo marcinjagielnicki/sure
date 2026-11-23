@@ -47,7 +47,7 @@ class Purchase::Linker
     return false unless purchase.matched? && transaction
 
     entry = transaction.entry
-    return false if entry.split_parent? || entry.split_child? || mismatch_reason(entry) || !category_owned_by_user?(transaction)
+    return false if entry.split_parent? || entry.split_child? || mismatch_reason(entry) || !transaction.category_set_by_user?
 
     groups = allocation
     groups.many? || (groups.one? && groups.first[:category].present? && groups.first[:category].id != transaction.category_id)
@@ -137,7 +137,7 @@ class Purchase::Linker
     def categorize(entry, override_user: false)
       transaction = entry.entryable
       return if entry.split_parent? || entry.split_child?
-      return if !override_user && category_owned_by_user?(transaction)
+      return if !override_user && transaction.category_set_by_user?
 
       groups = allocation
       if groups.one?
@@ -148,17 +148,6 @@ class Purchase::Linker
         transaction.lock_attr!(:category_id)
       elsif groups.many?
         entry.split_once!(groups.map { |group| split_for(group) }, lock_attributes: true)
-      end
-    end
-
-    # A locked category is the user's unless an automatic source (AI, a rule, Bayes, an earlier
-    # purchase link) set the current value and the user hasn't changed it since. AI and some
-    # categorizers lock what they set, so the lock alone doesn't mean the user chose it.
-    def category_owned_by_user?(transaction)
-      return false unless transaction.locked?(:category_id)
-
-      transaction.data_enrichments.where(attribute_name: "category_id").none? do |enrichment|
-        enrichment.value.to_s == transaction.category_id.to_s && enrichment.metadata&.dig("superseded") != true
       end
     end
 
