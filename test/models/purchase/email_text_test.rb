@@ -87,6 +87,14 @@ class Purchase::EmailTextTest < ActiveSupport::TestCase
     assert_equal [ [ "application/pdf", "invoice.pdf" ] ], files.map { [ _1[:content_type], _1[:filename] ] }
   end
 
+  # Logos are small images; a shop's e-receipt PDF can be smaller than the image minimum.
+  test "a small PDF is still sent" do
+    mail = Mail.new(from: "bob@bobdylan.com", subject: "Receipt", body: "Receipt")
+    mail.add_file(filename: "e-receipt.pdf", content: build_pdf(padding: 2_000))
+
+    assert_equal [ "e-receipt.pdf" ], Purchase::EmailText.new(mail).call.files.map { _1[:filename] }
+  end
+
   test "small images, other file types and oversized files are not sent" do
     mail = Mail.new(from: "bob@bobdylan.com", subject: "Order", body: "Order")
     mail.add_file(filename: "logo.png", content: Vips::Image.black(10, 10).pngsave_buffer)

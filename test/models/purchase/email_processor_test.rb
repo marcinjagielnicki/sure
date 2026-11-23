@@ -145,6 +145,33 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_nil @purchase.reload.linked_transaction
   end
 
+  test "reads with a configured provider that can, even when the preferred one can't" do
+    openai = stub(supports_purchase_extraction?: false)
+    anthropic = stub_purchase_provider
+    Provider::Registry.stubs(:preferred_llm_provider).returns(openai)
+    Provider::Registry.stubs(:llm_provider_order).returns(%i[openai anthropic])
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(openai)
+    Provider::Registry.stubs(:get_provider).with(:anthropic).returns(anthropic)
+
+    process
+
+    assert_equal "awaiting_payment", @purchase.reload.status
+  end
+
+  test "a run that fails after another run finished the purchase leaves it alone" do
+    provider = stub(supports_purchase_extraction?: true, default_model: "claude-test")
+    provider.stubs(:extract_purchase).with do |**|
+      Purchase.find(@purchase.id).update!(status: :awaiting_payment)
+      true
+    end.returns(Provider::Response.new(success?: false, data: nil, error: StandardError.new("timeout")))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    process
+
+    assert_equal "awaiting_payment", @purchase.reload.status
+    assert_nil @purchase.error
+  end
+
   test "no candidate leaves it awaiting payment with a deadline" do
     stub_purchase_provider
 

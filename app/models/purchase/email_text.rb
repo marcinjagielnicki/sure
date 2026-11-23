@@ -10,8 +10,9 @@ class Purchase::EmailText
   Result = Data.define(:text, :truncated, :input_chars, :original_from_domain, :files)
 
   FILE_CONTENT_TYPES = (ReceiptScan::ImageNormalizer::IMAGE_CONTENT_TYPES + [ "application/pdf" ]).freeze
-  # Smaller images are logos and icons from signatures and HTML layouts.
-  MIN_FILE_BYTES = 20.kilobytes
+  # Smaller images are logos and icons from signatures and HTML layouts. PDFs have no minimum:
+  # a shop's e-receipt can be a few kilobytes.
+  MIN_IMAGE_BYTES = 20.kilobytes
   MAX_FILE_BYTES = 10.megabytes
   MAX_FILES = 5
   # Receipts and invoices run to a page or two; longer PDFs are terms, catalogues or manuals,
@@ -102,7 +103,8 @@ class Purchase::EmailText
       return unless content_type.in?(FILE_CONTENT_TYPES) || content_type.in?(ReceiptScan::ImageNormalizer::GENERIC_CONTENT_TYPES)
 
       data = part.decoded.to_s.b
-      return unless data.bytesize.between?(MIN_FILE_BYTES, MAX_FILE_BYTES)
+      return if data.bytesize > MAX_FILE_BYTES
+      return if data.bytesize < MIN_IMAGE_BYTES && !data.start_with?("%PDF-")
 
       normalized = ReceiptScan::ImageNormalizer.call(io: StringIO.new(data), content_type:, filename: part.filename.presence || "attachment")
       bytes = normalized[:io].read
