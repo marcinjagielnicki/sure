@@ -52,16 +52,20 @@ class ReceiptDetailsSection extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   itemCount: images.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  // NetworkImage ignores headers when comparing images, so a photo first
+                  // requested without credentials would never be requested again with them.
                   itemBuilder: (context, index) => ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      images[index].thumbnailUrl ?? images[index].url,
-                      headers: imageHeaders,
-                      width: 90,
-                      height: 120,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(width: 90, height: 120, child: Icon(Icons.receipt_long_outlined)),
-                    ),
+                    child: imageHeaders == null
+                        ? const SizedBox(width: 90, height: 120, child: Icon(Icons.receipt_long_outlined))
+                        : Image.network(
+                            images[index].thumbnailUrl ?? images[index].url,
+                            headers: imageHeaders,
+                            width: 90,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(width: 90, height: 120, child: Icon(Icons.receipt_long_outlined)),
+                          ),
                   ),
                 ),
               ),

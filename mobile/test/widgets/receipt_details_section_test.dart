@@ -64,4 +64,25 @@ void main() {
     expect(image.url, endsWith('?variant=thumbnail'));
     expect(image.headers, {'X-Api-Key': 'key'});
   });
+
+  testWidgets('waits for the API credentials before loading receipt photos', (tester) async {
+    await pump(
+      tester,
+      TransactionReceipt(
+        status: 'completed',
+        attachments: const [
+          TransactionAttachment(
+            url: 'https://sure.test/api/v1/transactions/t/attachments/a',
+            contentType: 'image/jpeg',
+            filename: 'r.jpg',
+          ),
+        ],
+        lineItems: const [ReceiptLineItem(name: 'Cheese', amount: '30.00')],
+      ),
+    );
+
+    expect(find.byType(Image), findsNothing);
+    expect(find.byIcon(Icons.receipt_long_outlined), findsOneWidget);
+    expect(find.text('Cheese'), findsOneWidget);
+  });
 }
