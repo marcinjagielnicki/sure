@@ -62,9 +62,7 @@ class ReceiptScan::Processor
     end
 
     def provider
-      @provider ||= Provider::Registry.preferred_llm_provider.then do |candidate|
-        candidate if candidate&.supports_receipt_extraction?
-      end
+      @provider ||= ReceiptScan.extraction_provider
     end
 
     def extract
