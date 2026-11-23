@@ -18,6 +18,7 @@ class DataEnrichment < ApplicationRecord
     plaid: "plaid",
     purchase: "purchase",
     questrade: "questrade",
+    recurring_bill: "recurring_bill",
     redbark: "redbark",
     rule: "rule",
     sharesight: "sharesight",
