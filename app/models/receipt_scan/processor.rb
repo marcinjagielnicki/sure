@@ -169,6 +169,7 @@ class ReceiptScan::Processor
 
     def categorize(entry)
       return if extraction.total.nil? || entry.amount != extraction.total
+      return if entry.entryable.category_set_by_user?
 
       groups = ReceiptScan::CategoryAllocator.new(extraction, categories: family.categories).groups
       if groups.one?

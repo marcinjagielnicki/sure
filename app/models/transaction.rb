@@ -344,6 +344,17 @@ class Transaction < ApplicationRecord
     sanitize_sql_array([ "#{sql})", { attribute: attribute, sources: sources.flatten.map(&:to_s), since: since, metadata: metadata&.to_json } ])
   end
 
+  # The category is one the user chose: locked, and not still the value an automatic source
+  # (AI, Bayes, a rule, a receipt or purchase) recorded for it. AI and some categorizers lock
+  # what they set, so the lock alone doesn't mean the user chose it.
+  def category_set_by_user?
+    return false unless locked?(:category_id)
+
+    data_enrichments.where(attribute_name: "category_id").none? do |enrichment|
+      enrichment.value.to_s == category_id.to_s && enrichment.metadata&.dig("superseded") != true
+    end
+  end
+
   # Marks the AI's and Bayes' category enrichments of the given transactions
   # superseded: their category changed, so it is no longer the value they
   # recorded as theirs, even where it later equals it again. Callers hold the

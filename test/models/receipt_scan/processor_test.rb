@@ -139,6 +139,21 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_nil scan.error
   end
 
+  test "a category the user chose on the bank transaction is kept" do
+    shopping = @family.categories.create!(name: "Shopping", color: "#000000")
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date + 1.day, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new(category: shopping))
+    bank.entryable.lock_attr!(:category_id)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "30.00", "Food & Drink"), item("Soap", "20.00", "Household") ])
+
+    process(scan)
+
+    assert_equal bank.entryable, scan.reload.linked_transaction
+    assert_equal shopping, bank.entryable.reload.category
+    assert_not bank.reload.split_parent?
+  end
+
   test "merges into a pending bank transaction and defers the split" do
     pending = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
                             amount: BigDecimal("50.00"), entryable: Transaction.new(extra: { "plaid" => { "pending" => true } }))
