@@ -41,12 +41,24 @@ RSpec.describe 'API V1 Receipts', type: :request do
       consumes 'multipart/form-data'
       produces 'application/json'
 
+      # The first form parameter's schema describes the whole multipart body.
+      parameter name: :files, in: :formData, required: true,
+                description: 'Receipt photos or PDF, as files[]',
+                schema: {
+                  type: :object,
+                  required: %w[account_id files],
+                  properties: {
+                    account_id: { type: :string, format: :uuid, description: 'Account the receipt was paid from (needs write access to it)' },
+                    files: {
+                      type: :array, minItems: 1, maxItems: 5,
+                      description: 'Photos or a PDF of one receipt, 10 MB each (JPEG, PNG, WebP, HEIC, PDF)',
+                      items: { type: :string, format: :binary }
+                    }
+                  }
+                }
       parameter name: :account_id, in: :formData, required: true,
                 description: 'Account the receipt was paid from (needs write access to it)',
                 schema: { type: :string, format: :uuid }
-      parameter name: :files, in: :formData, required: true,
-                description: 'Receipt photos or PDF, as files[]',
-                schema: { type: :array, items: { type: :string, format: :binary } }
 
       response '202', 'receipt accepted for processing' do
         schema '$ref' => '#/components/schemas/ReceiptScan'
