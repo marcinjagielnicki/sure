@@ -83,7 +83,7 @@ class Purchase < ApplicationRecord
     account = linked_transaction&.entry&.account
     allowed =
       if receipt_scan
-        receipt_scan.account.shared_with?(user)
+        receipt_scan.family_id == family_id && receipt_scan.account.shared_with?(user)
       elsif account
         account.shared_with?(user)
       else

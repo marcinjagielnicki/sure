@@ -1136,8 +1136,15 @@ class UserTest < ActiveSupport::TestCase
     others = Purchase.create!(family: source_family, user: users(:family_admin), source: :email, status: :matched,
                               linked_transaction: moving.entries.create!(name: "Shop", date: Date.current, amount: 40, currency: "USD", entryable: Transaction.new).entryable)
 
+    moving_scan = ReceiptScan.create!(family: source_family, user: users(:family_admin), account: moving)
+    staying_scan = ReceiptScan.create!(family: source_family, user:, account: staying)
+    others_receipt = Purchase.create!(family: source_family, user: users(:family_admin), source: :receipt, status: :unmatched, receipt_scan: moving_scan)
+    own_receipt = Purchase.create!(family: source_family, user:, source: :receipt, status: :unmatched, receipt_scan: staying_scan)
+
     user.transfer_to_family!(new_family, role: "admin")
 
+    assert_nil others_receipt.reload.receipt_scan
+    assert_nil own_receipt.reload.receipt_scan
     assert_equal [ new_family, moving_tx ], [ stays_linked.reload.family, stays_linked.linked_transaction ]
     assert_equal new_family, loses_link.reload.family
     assert_nil loses_link.linked_transaction

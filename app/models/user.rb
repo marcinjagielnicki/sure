@@ -1012,6 +1012,12 @@ class User < ApplicationRecord
       moving_transactions = Transaction.joins(:entry).where(entries: { account_id: accounts_to_move.map(&:id) }).select(:id)
       Purchase.where(transaction_id: moving_transactions).where.not(user_id: id).find_each(&:unlink!)
       purchases.where.not(transaction_id: nil).where.not(transaction_id: moving_transactions).find_each(&:unlink!)
+
+      # The same for receipt scans, which follow their account.
+      moving_scans = ReceiptScan.where(account_id: accounts_to_move.map(&:id)).select(:id)
+      Purchase.where(receipt_scan_id: moving_scans).where.not(user_id: id).update_all(receipt_scan_id: nil, updated_at: Time.current)
+      purchases.where.not(receipt_scan_id: nil).where.not(receipt_scan_id: moving_scans).update_all(receipt_scan_id: nil, updated_at: Time.current)
+
       purchases.update_all(family_id: new_family.id, updated_at: Time.current)
     end
 
