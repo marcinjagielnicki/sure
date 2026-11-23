@@ -125,11 +125,11 @@ class Account::ProviderImportAdapter
       # Note: We don't pass name here to allow matching even when provider formats names differently
       if entry.new_record? && allow_heuristic_matching
         # A booking the provider links to its pending entry belongs to that entry,
-        # not to a receipt of the same amount.
+        # not to a receipt or manual entry of the same amount.
         linked_pending = pending_transaction_id.present? && account.entries.exists?(external_id: pending_transaction_id, source: source)
-        scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency) ||
-          (find_receipt_transaction(date: date, amount: amount, currency: currency) unless linked_pending)
-        duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency) unless scheduled
+        scheduled = find_scheduled_transaction(date: date, amount: amount, currency: currency)
+        receipt = find_receipt_transaction(date: date, amount: amount, currency: currency) unless scheduled || linked_pending
+        duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency) unless scheduled || receipt || linked_pending
 
         if scheduled
           # A bill or paycheck the user entered ahead of time has now been
@@ -140,6 +140,12 @@ class Account::ProviderImportAdapter
           # be recognized when the booked version arrives under a new id.
           entry = scheduled
           entry.assign_attributes(external_id: external_id, source: source, date: date)
+        elsif receipt
+          # A receipt is claimed the same way, but it already carries the day of
+          # the purchase: its locked date is kept by the financial-attribute
+          # guard below.
+          entry = receipt
+          entry.assign_attributes(external_id: external_id, source: source)
         elsif duplicate
           # Check if duplicate is protected - if so, link but don't modify
           if duplicate.protected_from_sync?

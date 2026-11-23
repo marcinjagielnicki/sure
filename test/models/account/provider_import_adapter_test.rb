@@ -1849,6 +1849,18 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "a posted transaction that claims a receipt keeps the receipt's date" do
+    receipt = create_receipt_entry(date: Date.current - 2.days, amount: 61.37)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_dated", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_equal receipt.id, entry.id
+    assert_equal Date.current - 2.days, entry.reload.date
+  end
+
   test "a statement import row finds a receipt entry within its window" do
     receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
 
@@ -2673,6 +2685,23 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     posted = @adapter.import_transaction(
       external_id: "plaid_posted_receipt", amount: 42.00, currency: "USD", date: Date.today,
       name: "Coffee Shop", source: "plaid", pending_transaction_id: "plaid_pending_receipt",
+      extra: { "plaid" => { "pending" => false } }
+    )
+
+    assert_equal pending.id, posted.id
+    assert_nil receipt.reload.external_id
+  end
+
+  test "a booking linked to its pending by id claims that pending, not a receipt from the same day" do
+    pending = @adapter.import_transaction(
+      external_id: "plaid_pending_same_day", amount: 42.00, currency: "USD", date: Date.today - 2.days,
+      name: "Coffee Shop", source: "plaid", extra: { "plaid" => { "pending" => true } }
+    )
+    receipt = create_receipt_entry(date: Date.today, amount: 42.00)
+
+    posted = @adapter.import_transaction(
+      external_id: "plaid_posted_same_day", amount: 42.00, currency: "USD", date: Date.today,
+      name: "Coffee Shop", source: "plaid", pending_transaction_id: "plaid_pending_same_day",
       extra: { "plaid" => { "pending" => false } }
     )
 
