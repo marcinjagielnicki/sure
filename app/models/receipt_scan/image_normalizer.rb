@@ -57,8 +57,14 @@ class ReceiptScan::ImageNormalizer
       sniffed.to_s.downcase
     end
 
-    # Reads only the header: the loader libvips chose and the image size.
+    # Checks the loader libvips picks from the file's bytes before anything opens it, then
+    # reads only the header for the image size.
     def verify_image!(path)
+      expected = LOADERS_BY_CONTENT_TYPE.fetch(content_type).delete_suffix("load")
+      unless Vips.vips_foreign_find_load(path).to_s.downcase.start_with?("vipsforeignload#{expected}")
+        raise UnsupportedFile, "Receipt file content does not match #{content_type}"
+      end
+
       header = Vips::Image.new_from_file(path, access: :sequential)
       loader = header.get("vips-loader").to_s
       unless loader.start_with?(LOADERS_BY_CONTENT_TYPE.fetch(content_type))
@@ -77,18 +83,25 @@ class ReceiptScan::ImageNormalizer
         source.flush
         verify_image!(source.path)
 
-        output = ImageProcessing::Vips
-          .source(source.path)
-          .autorot
-          .resize_to_limit(MAX_DIMENSION, MAX_DIMENSION)
-          .convert("jpg")
-          .saver(quality: JPEG_QUALITY, strip: true)
-          .call
+        output = convert_to_jpeg(source.path)
         begin
           File.binread(output.path)
         ensure
           output.close!
         end
       end
+    end
+
+    # libvips decodes pixels lazily, so a readable header doesn't mean the image converts.
+    def convert_to_jpeg(path)
+      ImageProcessing::Vips
+        .source(path)
+        .autorot
+        .resize_to_limit(MAX_DIMENSION, MAX_DIMENSION)
+        .convert("jpg")
+        .saver(quality: JPEG_QUALITY, strip: true)
+        .call
+    rescue Vips::Error
+      raise UnsupportedFile, "Receipt image could not be decoded"
     end
 end

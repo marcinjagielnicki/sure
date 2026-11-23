@@ -54,6 +54,22 @@ class ReceiptScan::ImageNormalizerTest < ActiveSupport::TestCase
     end
   end
 
+  test "a file of another type is rejected before libvips opens it" do
+    Vips::Image.expects(:new_from_file).never
+
+    File.open(file_fixture("receipts/receipt.pdf"), "rb") do |io|
+      assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
+        ReceiptScan::ImageNormalizer.call(io:, content_type: "image/jpeg", filename: "fake.jpg")
+      end
+    end
+  end
+
+  test "an image whose pixels can't be decoded is an unsupported file, not an error" do
+    ImageProcessing::Builder.any_instance.stubs(:call).raises(Vips::Error, "VipsJpeg: Premature end of JPEG file")
+
+    assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) { normalize("rotated.jpg", "image/jpeg") }
+  end
+
   test "rejects a pdf without a pdf signature" do
     assert_raises(ReceiptScan::ImageNormalizer::UnsupportedFile) do
       ReceiptScan::ImageNormalizer.call(io: StringIO.new("<html>"), content_type: "application/pdf", filename: "x.pdf")
