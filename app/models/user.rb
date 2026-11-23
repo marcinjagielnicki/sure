@@ -476,6 +476,7 @@ class User < ApplicationRecord
         # Scans follow their account, whichever member uploaded them.
         ReceiptScan.where(account: accounts_to_move).update_all(family_id: new_family.id, updated_at: Time.current)
       end
+      transfer_purchases!(new_family, accounts_to_move)
 
       provider_items_to_move.each do |provider_item|
         if provider_item.is_a?(FinancekitItem)
@@ -1005,6 +1006,15 @@ class User < ApplicationRecord
   end
 
   private
+    # The user's purchases follow them. A link that would cross the families is dropped: theirs
+    # to a transaction left behind, and other members' to a transaction that moves.
+    def transfer_purchases!(new_family, accounts_to_move)
+      moving_transactions = Transaction.joins(:entry).where(entries: { account_id: accounts_to_move.map(&:id) }).select(:id)
+      Purchase.where(transaction_id: moving_transactions).where.not(user_id: id).find_each(&:unlink!)
+      purchases.where.not(transaction_id: nil).where.not(transaction_id: moving_transactions).find_each(&:unlink!)
+      purchases.update_all(family_id: new_family.id, updated_at: Time.current)
+    end
+
     def apply_ui_layout_defaults
       self.ui_layout = (ui_layout.presence || self.class.default_ui_layout)
     end
