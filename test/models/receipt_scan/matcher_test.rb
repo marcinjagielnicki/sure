@@ -37,6 +37,19 @@ class ReceiptScan::MatcherTest < ActiveSupport::TestCase
     assert_equal [ bank ], result.entries
   end
 
+  test "a transfer or card payment of the same amount is not the receipt's payment" do
+    add_entry(date: @date + 1.day).entryable.update!(kind: "cc_payment")
+    bank = add_entry(date: @date + 2.days)
+
+    assert_equal [ bank ], match.entries
+  end
+
+  test "an entry the user excluded is not the receipt's payment" do
+    add_entry(date: @date + 1.day).update!(excluded: true)
+
+    assert_equal :none, match.kind
+  end
+
   test "no match outside window" do
     add_entry(date: @date + 4.days)
 

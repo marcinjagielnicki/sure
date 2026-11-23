@@ -37,6 +37,53 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     end
   end
 
+  test "a scan whose reading can't be queued is marked failed instead of processing forever" do
+    ReceiptScan::ProcessJob.stubs(:perform_later).returns(false)
+
+    scan = upload("rotated.jpg", "image/jpeg")
+
+    assert scan.reload.failed?
+    assert_equal "needs_review", scan.linked_transaction.extra.dig("receipt", "status")
+  end
+
+  test "a queueing error also marks the scan failed" do
+    ReceiptScan::ProcessJob.stubs(:perform_later).raises(RedisClient::CannotConnectError)
+
+    scan = upload("rotated.jpg", "image/jpeg")
+
+    assert scan.reload.failed?
+  end
+
+  test "rejects a pdf sent with other files" do
+    [ uploaded("receipt.pdf", "application/pdf"), uploaded("rotated.jpg", "image/jpeg") ].each do |other|
+      assert_raises(ReceiptScan::InvalidUpload) do
+        ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,
+                                         uploads: [ uploaded("receipt.pdf", "application/pdf"), other ])
+      end
+    end
+  end
+
+  test "rejects an account moved to another family before the scan is saved" do
+    stale = Account.find(@account.id)
+    @account.update_columns(family_id: families(:empty).id)
+
+    assert_raises(ActiveRecord::RecordInvalid) do
+      ReceiptScan.create_from_upload!(family: @family, user: @user, account: stale, uploads: [ uploaded("rotated.jpg", "image/jpeg") ])
+    end
+  end
+
+  test "a scan whose files can't be stored ends as failed instead of processing" do
+    ActiveStorage::Attached::Changes::CreateMany.any_instance.stubs(:upload).raises(StandardError, "storage down")
+
+    scan = nil
+    assert_no_enqueued_jobs(only: ReceiptScan::ProcessJob) do
+      scan = upload("rotated.jpg", "image/jpeg")
+    end
+
+    assert scan.reload.failed?
+    assert_equal "storage down", scan.error
+  end
+
   test "rejects txt" do
     assert_raises(ReceiptScan::InvalidUpload) do
       ReceiptScan.create_from_upload!(family: @family, user: @user, account: @account,
@@ -87,6 +134,71 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_equal scan.files.map(&:blob_id), bank.entryable.attachments.map(&:blob_id)
     assert_equal "Corner Grocer", bank.entryable.reload.extra.dig("receipt", "merchant")
     assert_equal @food, bank.entryable.category
+  end
+
+  # Two scans can pick the same bank entry before either has merged: the second must
+  # see the first one's receipt once it holds the entry's lock.
+  test "a bank transaction another receipt merged into meanwhile isn't taken twice" do
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date + 1.day, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    bank.entryable # the matcher hands over this instance, loaded before the other receipt lands
+    ReceiptScan::Matcher.any_instance.stubs(:result).returns(ReceiptScan::Matcher::Result.new(kind: :single, entries: [ bank ]))
+    Transaction.find(bank.entryable_id).update!(extra: { "receipt" => { "scan_id" => "other-scan", "merchant" => "First" } })
+
+    process(scan)
+
+    assert_equal "First", bank.entryable.reload.extra.dig("receipt", "merchant")
+    assert_not_equal bank.entryable, scan.reload.linked_transaction
+    assert_includes scan.review_reasons.map { _1["reason"] }, "duplicate_receipt"
+  end
+
+  test "a bank transaction whose amount changed after matching keeps the placeholder" do
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date + 1.day, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    placeholder = scan.linked_transaction
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    ReceiptScan::Matcher.any_instance.stubs(:result).returns(ReceiptScan::Matcher::Result.new(kind: :single, entries: [ bank ]))
+    Entry.find(bank.id).update!(amount: BigDecimal("60.00"))
+
+    process(scan)
+
+    assert_equal placeholder, scan.reload.linked_transaction
+    assert Entry.exists?(placeholder.entry.id)
+    assert_nil bank.entryable.reload.extra["receipt"]
+  end
+
+  test "a run that fails after another run finished the scan leaves the finished scan alone" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    provider = stub(supports_receipt_extraction?: true)
+    provider.stubs(:extract_receipt).with do |**|
+      # Another run completes the scan while this one waits for the model.
+      ReceiptScan.find(scan.id).update!(status: :completed)
+      true
+    end.returns(Provider::Response.new(success?: false, data: nil, error: StandardError.new("timeout")))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    process(scan)
+
+    assert scan.reload.completed?
+    assert_nil scan.error
+  end
+
+  test "a category the user chose on the bank transaction is kept" do
+    shopping = @family.categories.create!(name: "Shopping", color: "#000000")
+    bank = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date + 1.day, currency: "USD",
+                         amount: BigDecimal("50.00"), entryable: Transaction.new(category: shopping))
+    bank.entryable.lock_attr!(:category_id)
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "30.00", "Food & Drink"), item("Soap", "20.00", "Household") ])
+
+    process(scan)
+
+    assert_equal bank.entryable, scan.reload.linked_transaction
+    assert_equal shopping, bank.entryable.reload.category
+    assert_not bank.reload.split_parent?
   end
 
   test "merges into a pending bank transaction and defers the split" do
@@ -205,6 +317,32 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
 
     assert scan.reload.failed?
     assert_equal "boom", scan.error
+  end
+
+  test "an error after the scan was flagged still marks it failed" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    stub_extraction(line_items: [ item("Cheese", "10.00", "Food & Drink") ])
+    ReceiptScan::Matcher.any_instance.stubs(:result).raises(StandardError, "boom")
+
+    assert_nothing_raised { process(scan) }
+
+    assert scan.reload.failed?
+    assert_equal "boom", scan.error
+    assert_empty scan.review_reasons
+  end
+
+  test "an error after merging into a bank transaction still marks the scan failed" do
+    Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
+                  amount: BigDecimal("50.00"), entryable: Transaction.new)
+    scan = upload("rotated.jpg", "image/jpeg")
+    placeholder = scan.linked_transaction
+    stub_extraction(line_items: [ item("Cheese", "50.00", "Food & Drink") ])
+    Purchase::CategoryAllocator.any_instance.stubs(:groups).raises(StandardError, "boom")
+
+    assert_nothing_raised { process(scan) }
+
+    assert scan.reload.failed?
+    assert_equal placeholder, scan.linked_transaction
   end
 
   test "a processed receipt becomes a matched purchase with its items" do

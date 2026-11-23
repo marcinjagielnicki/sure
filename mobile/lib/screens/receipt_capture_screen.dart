@@ -45,6 +45,9 @@ class ReceiptCaptureScreen extends StatefulWidget {
 class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
   final List<XFile> _photos = [];
   String? _accountId;
+  // Set once the user picks an account, so the remembered one, read
+  // asynchronously, doesn't replace their choice.
+  bool _accountPicked = false;
   bool _uploading = false;
   late final ReceiptsService _service = widget.service ?? ReceiptsService();
 
@@ -58,7 +61,7 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
       return;
     }
     PreferencesService.instance.getLastReceiptAccountId().then((lastId) {
-      if (!mounted || lastId == null) return;
+      if (!mounted || lastId == null || _accountPicked) return;
       if (widget.accounts.any((account) => account.id == lastId)) {
         setState(() => _accountId = lastId);
       }
@@ -109,7 +112,19 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
   }
 
   Future<void> _chooseFromGallery() async {
-    _addPhotos(await _pickFromGallery());
+    final List<XFile> picked;
+    try {
+      picked = await _pickFromGallery();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(AppLocalizations.of(context)
+                .receiptGalleryFailed(error.toString()))),
+      );
+      return;
+    }
+    _addPhotos(picked);
   }
 
   void _addPhotos(List<XFile> picked) {
@@ -141,7 +156,8 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
       await PreferencesService.instance.setLastReceiptAccountId(accountId);
 
       messenger.showSnackBar(SnackBar(content: Text(l.receiptUploaded)));
-      if (navigator.canPop()) navigator.pop(true);
+      // The screen may have been closed during the upload; its navigator is then stale.
+      if (mounted && navigator.canPop()) navigator.pop(true);
     } catch (error) {
       messenger.showSnackBar(
           SnackBar(content: Text(l.receiptUploadFailed(error.toString()))));
@@ -218,7 +234,10 @@ class _ReceiptCaptureScreenState extends State<ReceiptCaptureScreen> {
               ],
               onChanged: _uploading
                   ? null
-                  : (value) => setState(() => _accountId = value),
+                  : (value) => setState(() {
+                        _accountPicked = true;
+                        _accountId = value;
+                      }),
             ),
             const SizedBox(height: 24),
             FilledButton(

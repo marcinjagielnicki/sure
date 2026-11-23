@@ -181,6 +181,7 @@ class OfflineTransaction extends Transaction {
       tagIds: nextTagIds,
       tagNames: nextTagIds.map((tagId) => tagNamesById[tagId] ?? '').toList(),
       tagsProvided: true,
+      receipt: receipt,
     );
   }
 

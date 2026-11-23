@@ -9,6 +9,7 @@ import '../models/transaction_tag.dart';
 import '../providers/auth_provider.dart';
 import '../providers/categories_provider.dart';
 import '../providers/merchants_provider.dart';
+import '../providers/privacy_provider.dart';
 import '../providers/tags_provider.dart';
 import '../providers/transactions_provider.dart';
 import '../l10n/app_localizations.dart';
@@ -339,6 +340,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
                 builder: (context, snapshot) => ReceiptDetailsSection(
                   receipt: widget.transaction.receipt,
                   imageHeaders: snapshot.data == null ? null : ApiConfig.getAuthHeaders(snapshot.data!),
+                  hideAmounts: context.watch<PrivacyProvider>().hidden,
                 ),
               ),
               const SizedBox(height: 16),

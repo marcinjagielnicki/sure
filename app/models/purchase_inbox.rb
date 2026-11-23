@@ -24,6 +24,17 @@ module PurchaseInbox
     )
   end
 
+  # PURCHASE_INBOX_IMAP_PORT; empty or missing means IMAPS (993), never port 0.
+  def env_port(value)
+    value.to_s.strip.presence&.to_i || 993
+  end
+
+  # PURCHASE_INBOX_IMAP_SSL; only an explicit "false" turns TLS off, so an empty variable
+  # doesn't send the mailbox password in clear text.
+  def env_ssl(value)
+    !value.to_s.strip.casecmp?("false")
+  end
+
   # Enough settings to log in, and a trusted authentication host when senders must be verified.
   def configured?(config = self.config)
     config.enabled && config.host.present? && config.username.present? && config.password.present? &&

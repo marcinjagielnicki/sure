@@ -24,6 +24,7 @@ class PurchaseInbox::PollerTest < ActiveSupport::TestCase
     def logout = @calls << [ :logout ]
     def disconnect = @calls << [ :disconnect ]
     def expunge = @calls << [ :expunge ]
+    def uid_expunge(uid) = @calls << [ :uid_expunge, uid ]
     def create(folder) = @created << folder
 
     def uid_fetch(uid, attrs)
@@ -68,14 +69,47 @@ class PurchaseInbox::PollerTest < ActiveSupport::TestCase
     assert_includes imap.calls, [ :logout ]
   end
 
-  test "copies, deletes and expunges when the server can't MOVE" do
-    imap = FakeImap.new(messages: { 7 => @raw }, capabilities: %w[IMAP4REV1])
+  test "without MOVE it copies and expunges only the processed message when the server has UIDPLUS" do
+    imap = FakeImap.new(messages: { 7 => @raw }, capabilities: %w[IMAP4REV1 UIDPLUS])
 
     poll(imap)
 
     assert_equal [ [ 7, "Sure/Processed" ] ], imap.moved
     assert_equal [ 7 ], imap.deleted
-    assert_includes imap.calls, [ :expunge ]
+    assert_includes imap.calls, [ :uid_expunge, 7 ]
+    assert_not_includes imap.calls, [ :expunge ]
+  end
+
+  # A mailbox-wide EXPUNGE would also remove messages another client marked deleted.
+  test "without MOVE or UIDPLUS it only copies, leaving the read message in place" do
+    imap = FakeImap.new(messages: { 7 => @raw }, capabilities: %w[IMAP4REV1])
+
+    poll(imap)
+
+    assert_equal [ [ 7, "Sure/Processed" ] ], imap.moved
+    assert_empty imap.deleted
+    assert_not_includes imap.calls, [ :expunge ]
+  end
+
+  test "a server that stops answering ends the session and disconnects" do
+    imap = FakeImap.new(messages: { 7 => @raw })
+    def imap.login(*) = sleep(5)
+    def imap.logout = sleep(5)
+    poller = PurchaseInbox::Poller.new(config: @config, imap_factory: ->(_c) { imap })
+    poller.stubs(:session_timeout).returns(0.1)
+    poller.stubs(:logout_timeout).returns(0.1)
+
+    assert_raises(Timeout::Error) { poller.poll! }
+    assert_includes imap.calls, [ :disconnect ]
+  end
+
+  test "a broken connection at logout still disconnects" do
+    imap = FakeImap.new(messages: {})
+    def imap.logout = raise(Errno::EPIPE)
+
+    poll(imap)
+
+    assert_includes imap.calls, [ :disconnect ]
   end
 
   test "skips and marks seen a message that's too large" do

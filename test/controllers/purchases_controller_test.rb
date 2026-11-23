@@ -80,6 +80,21 @@ class PurchasesControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href='#{purchase_path(@awaiting)}']", text: /A/
   end
 
+  test "a purchase in a currency nobody knows still shows, with its amount as read" do
+    @awaiting.update!(currency: "ZL", total: BigDecimal("12.50"), shipping_cost: BigDecimal("1"))
+    @awaiting.items.create!(name: "Mug", amount: BigDecimal("11.50"), position: 0)
+
+    get purchases_url
+    assert_response :success
+    assert_includes response.body, "12.5 ZL"
+
+    get purchase_url(@awaiting)
+    assert_response :success
+
+    get new_purchase_link_url(@awaiting)
+    assert_response :success
+  end
+
   test "the to-match tab lists only purchases waiting for a payment" do
     get purchases_url(tab: "to_match")
 

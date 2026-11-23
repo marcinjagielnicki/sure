@@ -29,7 +29,7 @@
   </span>
   <span class="flex flex-col items-end gap-1 shrink-0">
     <span class="text-sm font-medium text-primary privacy-sensitive">
-      <%= purchase.total ? format_money(Money.new(purchase.total, purchase.currency.presence || Current.family.currency)) : "—" %>
+      <%= purchase_amount(purchase, purchase.total) %>
     </span>
     <%= render "purchases/status_badge", purchase: purchase %>
   </span>

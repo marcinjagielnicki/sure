@@ -7,5 +7,6 @@ en:
     errors:
       no_files: Add at least one photo or file of the receipt.
       too_many_files: A receipt can have at most %{count} files.
+      pdf_with_other_files: Send a PDF receipt on its own, without other files.
       too_large: Each receipt file can be at most %{size} MB.
       unsupported_file: "%{filename} is not a supported receipt file (JPEG, PNG, WebP, HEIC or PDF)."

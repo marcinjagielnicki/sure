@@ -73,7 +73,10 @@ class ReceiptScan::Matcher
       same_payment
         .where(date: (extraction.date - window)..(extraction.date + window))
         .where.not("transactions.extra ? 'receipt'")
+        # Transfers and card payments move money, they don't buy anything.
+        .where("transactions.kind IS NULL OR transactions.kind NOT IN (?)", Transaction::TRANSFER_KINDS)
         .where.not(id: Entry.where.not(parent_entry_id: nil).select(:parent_entry_id))
+        .where(excluded: false)
         .order(:date, :created_at)
     end
 end

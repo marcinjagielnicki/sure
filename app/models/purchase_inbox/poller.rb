@@ -1,8 +1,13 @@
 # Fetches new messages from the order mailbox over IMAP and hands each to Action Mailbox. A
-# fetched message is marked seen and moved to the processed folder, so it is read once.
+# fetched message is marked seen and moved to the processed folder (copied, where the server
+# can't move or expunge a single message), so it is read once.
 class PurchaseInbox::Poller
   MAX_MESSAGES = 50
   MAX_BYTES = 25.megabytes
+  # net-imap waits for command responses without a deadline, so a server that keeps the
+  # connection open but stops answering would hold the job (or the settings page) forever.
+  SESSION_TIMEOUT = 5.minutes
+  LOGOUT_TIMEOUT = 10.seconds
   DEFAULT_IMAP_FACTORY = ->(config) { Net::IMAP.new(config.host, port: config.port, ssl: config.ssl) }
 
   def self.test_connection(config: PurchaseInbox.config, imap_factory: DEFAULT_IMAP_FACTORY)
@@ -36,18 +41,26 @@ class PurchaseInbox::Poller
     attr_reader :config, :imap_factory
 
     def session
-      imap = imap_factory.call(config)
-      imap.login(config.username, config.password)
-      imap.select(config.folder)
-      yield imap
+      imap = nil
+      Timeout.timeout(session_timeout) do
+        imap = imap_factory.call(config)
+        imap.login(config.username, config.password)
+        imap.select(config.folder)
+        yield imap
+      end
     ensure
       begin
-        imap&.logout
-      rescue Net::IMAP::Error, IOError
-        nil
+        Timeout.timeout(logout_timeout) { imap&.logout }
+      rescue Net::IMAP::Error, IOError, SystemCallError, OpenSSL::SSL::SSLError, Timeout::Error
+        nil # the connection is going away either way
+      ensure
+        imap&.disconnect
       end
-      imap&.disconnect
     end
+
+    def session_timeout = SESSION_TIMEOUT
+
+    def logout_timeout = LOGOUT_TIMEOUT
 
     def ingest(imap, uid)
       size = imap.uid_fetch(uid, [ "RFC822.SIZE" ])&.first&.attr&.fetch("RFC822.SIZE", 0).to_i
@@ -78,12 +91,17 @@ class PurchaseInbox::Poller
       return if folder.blank?
 
       ensure_folder(imap, folder)
-      if Array(imap.capability).map(&:upcase).include?("MOVE")
+      capabilities = Array(imap.capability).map(&:upcase)
+      if capabilities.include?("MOVE")
         imap.uid_move(uid, folder)
       else
         imap.uid_copy(uid, folder)
-        imap.uid_store(uid, "+FLAGS", [ :Deleted ])
-        imap.expunge
+        # Only UID EXPUNGE removes just this message; a plain EXPUNGE would also remove what
+        # other clients marked deleted. Without it the read (and seen) message stays put.
+        if capabilities.include?("UIDPLUS")
+          imap.uid_store(uid, "+FLAGS", [ :Deleted ])
+          imap.uid_expunge(uid)
+        end
       end
     rescue Net::IMAP::Error => e
       Rails.logger.warn("PurchaseInbox: could not move message #{uid}: #{e.message}")

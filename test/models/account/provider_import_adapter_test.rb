@@ -1849,6 +1849,85 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "a posted transaction that claims a receipt keeps the receipt's date" do
+    receipt = create_receipt_entry(date: Date.current - 2.days, amount: 61.37)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_dated", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_equal receipt.id, entry.id
+    assert_equal Date.current - 2.days, entry.reload.date
+  end
+
+  test "a posted transaction does not claim a receipt the user excluded" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    receipt.update!(excluded: true)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_excluded", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+  end
+
+  test "a bank charge does not claim a receipt paid in cash" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    receipt.entryable.update!(extra: { "receipt" => { "status" => "completed", "payment_method" => "cash" } })
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_receipt_cash", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD OTHER SHOP", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+  end
+
+  test "a zero amount booking does not claim a receipt that was never read" do
+    failed = @account.entries.create!(
+      date: Date.current, amount: 0, currency: "USD", name: "Processing receipt…",
+      entryable: Transaction.new(extra: { "receipt" => { "status" => "needs_review" } })
+    )
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_zero_hold", amount: 0, currency: "USD",
+      date: Date.current, name: "CARD HOLD", source: "simplefin"
+    )
+
+    assert_not_equal failed.id, entry.id
+  end
+
+  test "a receipt still being read is not claimed as an upcoming payment" do
+    placeholder = @account.entries.create!(
+      date: Date.current + 1.day, amount: 0, currency: "USD", name: "Processing receipt…",
+      entryable: Transaction.new(extra: { "receipt" => { "status" => "processing" } })
+    )
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_zero_upcoming", amount: 0, currency: "USD",
+      date: Date.current, name: "CARD HOLD", source: "simplefin"
+    )
+
+    assert_not_equal placeholder.id, entry.id
+  end
+
+  test "a receipt another import claimed meanwhile is not claimed again" do
+    receipt = create_receipt_entry(date: Date.current - 1.day, amount: 61.37)
+    stale = Entry.find(receipt.id)
+    receipt.update_columns(external_id: "simplefin_first", source: "simplefin")
+    @adapter.stubs(:find_receipt_transaction).returns(stale)
+
+    entry = @adapter.import_transaction(
+      external_id: "simplefin_second", amount: 61.37, currency: "USD",
+      date: Date.current, name: "CARD CORNER GROCER", source: "simplefin"
+    )
+
+    assert_not_equal receipt.id, entry.id
+    assert_equal "simplefin_first", receipt.reload.external_id
+  end
+
   test "a statement import row finds a receipt entry within its window" do
     receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
 
@@ -1896,6 +1975,25 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
         date: Date.current, name: "CARD", source: "simplefin"
       )
     end
+  end
+
+  test "a split receipt claimed while pending stops being pending when booked under the same id" do
+    receipt = create_receipt_entry(date: Date.current - 3.days, amount: 61.37)
+    receipt.split!([ { name: "Food", amount: 41.37, category_id: nil }, { name: "Home", amount: 20, category_id: nil } ])
+    @adapter.import_transaction(
+      external_id: "simplefin_same_id", amount: 61.37, currency: "USD", date: Date.current - 2.days,
+      name: "CARD CORNER GROCER", source: "simplefin", extra: { "simplefin" => { "pending" => true } }
+    )
+
+    booked = @adapter.import_transaction(
+      external_id: "simplefin_same_id", amount: 61.37, currency: "USD", date: Date.current,
+      name: "CARD CORNER GROCER", source: "simplefin", extra: { "simplefin" => { "pending" => false } }
+    )
+
+    assert_equal receipt.id, booked.id
+    assert_not booked.reload.transaction.pending?
+    assert booked.excluded?
+    assert_equal 2, booked.child_entries.count
   end
 
   test "a split receipt claimed while pending reconciles with its booked version" do
@@ -2642,6 +2740,40 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
       assert_equal "plaid_posted_xyz", posted_entry.external_id
       assert_not posted_entry.transaction.pending?
     end
+  end
+
+  test "a booking linked to its pending by id claims that pending, not a receipt of the same amount" do
+    pending = @adapter.import_transaction(
+      external_id: "plaid_pending_receipt", amount: 42.00, currency: "USD", date: Date.today - 2.days,
+      name: "Coffee Shop", source: "plaid", extra: { "plaid" => { "pending" => true } }
+    )
+    receipt = create_receipt_entry(date: Date.today - 1.day, amount: 42.00)
+
+    posted = @adapter.import_transaction(
+      external_id: "plaid_posted_receipt", amount: 42.00, currency: "USD", date: Date.today,
+      name: "Coffee Shop", source: "plaid", pending_transaction_id: "plaid_pending_receipt",
+      extra: { "plaid" => { "pending" => false } }
+    )
+
+    assert_equal pending.id, posted.id
+    assert_nil receipt.reload.external_id
+  end
+
+  test "a booking linked to its pending by id claims that pending, not a receipt from the same day" do
+    pending = @adapter.import_transaction(
+      external_id: "plaid_pending_same_day", amount: 42.00, currency: "USD", date: Date.today - 2.days,
+      name: "Coffee Shop", source: "plaid", extra: { "plaid" => { "pending" => true } }
+    )
+    receipt = create_receipt_entry(date: Date.today, amount: 42.00)
+
+    posted = @adapter.import_transaction(
+      external_id: "plaid_posted_same_day", amount: 42.00, currency: "USD", date: Date.today,
+      name: "Coffee Shop", source: "plaid", pending_transaction_id: "plaid_pending_same_day",
+      extra: { "plaid" => { "pending" => false } }
+    )
+
+    assert_equal pending.id, posted.id
+    assert_nil receipt.reload.external_id
   end
 
   test "preserves transaction tags when re-importing existing transaction" do

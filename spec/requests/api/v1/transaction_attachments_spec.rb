@@ -38,6 +38,7 @@ RSpec.describe 'API V1 Transaction Attachments', type: :request do
       produces 'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/json'
 
       response '200', 'attachment file' do
+        schema type: :string, format: :binary
         let(:id) { attachment.id }
         run_test!
       end

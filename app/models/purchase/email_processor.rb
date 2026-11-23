@@ -44,9 +44,7 @@ class Purchase::EmailProcessor
     def family = purchase.family
 
     def provider
-      @provider ||= Provider::Registry.preferred_llm_provider.then do |candidate|
-        candidate if candidate&.supports_purchase_extraction?
-      end
+      @provider ||= Provider::Registry.llm_provider_supporting(:supports_purchase_extraction?)
     end
 
     def extract(files)
@@ -187,12 +185,31 @@ class Purchase::EmailProcessor
       }
     end
 
+    # What was read is already saved: a notice that can't be queued is logged, not a failure.
     def notify(outcome)
       PurchaseMailer.with(purchase:).public_send(outcome).deliver_later
+    rescue StandardError => e
+      DebugLogEntry.capture(
+        category: "purchase_inbox",
+        level: "warn",
+        message: "Couldn't queue the #{outcome} email for a purchase: #{e.message}",
+        source: self.class.name,
+        family:,
+        user: purchase.user,
+        metadata: { purchase_id: purchase.id, error_class: e.class.name }
+      )
     end
 
+    # Only a purchase still being read fails: another run may have finished it meanwhile.
     def record_failure(error)
-      purchase.reload.update!(status: :failed, error: error&.message)
+      failed = purchase.with_lock do
+        next false unless purchase.processing?
+
+        purchase.update!(status: :failed, error: error&.message)
+        true
+      end
+      return unless failed
+
       DebugLogEntry.capture(
         category: "ai",
         level: "error",

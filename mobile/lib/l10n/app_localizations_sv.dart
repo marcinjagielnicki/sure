@@ -1292,6 +1292,11 @@ class AppLocalizationsSv extends AppLocalizations {
   }
 
   @override
+  String receiptGalleryFailed(String message) {
+    return 'Couldn\'t open your photos: $message';
+  }
+
+  @override
   String receiptUploadFailed(String message) {
     return 'Couldn\'t upload the receipt: $message';
   }

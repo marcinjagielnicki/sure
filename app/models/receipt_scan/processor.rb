@@ -40,6 +40,12 @@ class ReceiptScan::Processor
     record_failure(e)
   end
 
+  # Ends a scan that won't be read as failed (e.g. its job couldn't be queued).
+  def fail!(error)
+    @placeholder = scan.linked_transaction
+    record_failure(error)
+  end
+
   private
     attr_reader :scan, :extraction, :problems, :placeholder
 
@@ -76,9 +82,7 @@ class ReceiptScan::Processor
     end
 
     def provider
-      @provider ||= Provider::Registry.preferred_llm_provider.then do |candidate|
-        candidate if candidate&.supports_receipt_extraction?
-      end
+      @provider ||= ReceiptScan.extraction_provider
     end
 
     def extract
@@ -93,9 +97,17 @@ class ReceiptScan::Processor
       nil
     end
 
+    # Only a scan still processing fails: another run may have finished it meanwhile.
     def record_failure(error)
-      scan.reload.update!(status: :failed, error: error&.message)
-      write_receipt_extra(placeholder) if placeholder && Transaction.exists?(placeholder.id)
+      failed = scan.with_lock do
+        next false unless scan.processing?
+
+        scan.update!(status: :failed, error: error&.message)
+        write_receipt_extra(placeholder) if placeholder && Transaction.exists?(placeholder.id)
+        true
+      end
+      return unless failed
+
       DebugLogEntry.capture(
         category: "ai",
         level: "error",
@@ -130,7 +142,23 @@ class ReceiptScan::Processor
       end
     end
 
+    # Holds the bank entry's lock until the scan's work commits, so two scans that both picked it
+    # don't both merge: the second sees the first one's receipt and keeps its placeholder.
     def merge_into(bank_transaction)
+      bank_entry = bank_transaction.entry
+      bank_entry.lock!
+      bank_transaction.lock!
+      # The bank may have changed the entry since the matcher picked it (a pending booked at
+      # another amount); then it is no longer this payment.
+      unless bank_entry.amount == extraction.total && bank_entry.currency == extraction.currency && !bank_entry.excluded?
+        return placeholder
+      end
+
+      if bank_transaction.extra["receipt"].present?
+        scan.flag!(:duplicate_receipt, entry_id: bank_transaction.entry.id)
+        return placeholder
+      end
+
       if bank_transaction.attachments.count + scan.files.count > Transaction::MAX_ATTACHMENTS_PER_TRANSACTION
         scan.flag!(:too_many_attachments, entry_id: bank_transaction.entry.id)
         return placeholder
@@ -163,6 +191,7 @@ class ReceiptScan::Processor
 
     def categorize(entry)
       return if extraction.total.nil? || entry.amount != extraction.total
+      return if entry.entryable.category_set_by_user?
 
       groups = Purchase::CategoryAllocator.new(total: extraction.total, items: extraction.line_items, categories: family.categories).groups
       if groups.one?

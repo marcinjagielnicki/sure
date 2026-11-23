@@ -83,7 +83,7 @@ class Purchase < ApplicationRecord
     account = linked_transaction&.entry&.account
     allowed =
       if receipt_scan
-        receipt_scan.account.shared_with?(user)
+        receipt_scan.family_id == family_id && receipt_scan.account.shared_with?(user)
       elsif account
         account.shared_with?(user)
       else
@@ -92,6 +92,23 @@ class Purchase < ApplicationRecord
     return [] unless allowed
 
     (receipt_scan ? receipt_scan.files : receipt_files).attachments.includes(:blob).to_a
+  end
+
+  # One of this purchase's amounts as Money, or nil when there's no amount or its currency is one
+  # Money doesn't know (the read flags it as unknown_currency).
+  def money(amount)
+    return if amount.nil?
+
+    Money.new(amount, currency.presence || family.currency)
+  rescue Money::Currency::UnknownCurrencyError
+    nil
+  end
+
+  # The amount formatted in the purchase's currency, or as read ("12.5 ZL") when Money can't.
+  def amount_text(amount, formatter: :format.to_proc)
+    return "—" if amount.nil?
+
+    (money = money(amount)) ? formatter.call(money) : "#{amount.to_d.to_s("F")} #{currency}"
   end
 
   def categories_held_back?
@@ -126,8 +143,15 @@ class Purchase < ApplicationRecord
   def reprocess!
     return unless failed? && email?
 
+    previous_error = error
     update!(status: :processing, error: nil)
-    Purchase::EmailProcessJob.perform_later(self)
+    begin
+      Purchase::EmailProcessJob.perform_later(self)
+    rescue StandardError
+      # Left processing with no job, it could never be retried.
+      update!(status: :failed, error: previous_error)
+      raise
+    end
   end
 
   # Re-checks the stored AI read against the current total rules, without calling the AI again.

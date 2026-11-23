@@ -11,7 +11,8 @@ RSpec.describe 'API V1 Receipts', type: :request do
       email: 'api-user@example.com',
       password: 'password123',
       password_confirmation: 'password123',
-      role: 'admin'
+      role: 'admin',
+      preferences: { 'preview_features_enabled' => true }
     )
   end
   let(:api_key) do
@@ -32,7 +33,7 @@ RSpec.describe 'API V1 Receipts', type: :request do
 
   path '/api/v1/receipts' do
     post 'Upload a receipt' do
-      description 'Uploads up to 5 photos or a PDF of one receipt, bill or invoice (10 MB each; JPEG, PNG, WebP, HEIC, PDF) ' \
+      description 'Uploads up to 5 photos, or one PDF on its own, of one receipt, bill or invoice (10 MB each; JPEG, PNG, WebP, HEIC, PDF) ' \
                   'for an account the caller can write to. A "Processing receipt…" transaction is created at once; the receipt ' \
                   'is then read in the background, the transaction filled in and split by category, or the receipt attached to ' \
                   'an existing bank transaction for the same payment. Poll the receipt for its status.'
@@ -41,12 +42,24 @@ RSpec.describe 'API V1 Receipts', type: :request do
       consumes 'multipart/form-data'
       produces 'application/json'
 
+      # The first form parameter's schema describes the whole multipart body.
+      parameter name: :files, in: :formData, required: true,
+                description: 'Receipt photos or PDF, as files[]',
+                schema: {
+                  type: :object,
+                  required: %w[account_id files[]],
+                  properties: {
+                    account_id: { type: :string, format: :uuid, description: 'Account the receipt was paid from (needs write access to it)' },
+                    'files[]': {
+                      type: :array, minItems: 1, maxItems: 5,
+                      description: 'Up to 5 photos, or one PDF, of one receipt, 10 MB each (JPEG, PNG, WebP, HEIC, PDF). Send each file as a files[] part.',
+                      items: { type: :string, format: :binary }
+                    }
+                  }
+                }
       parameter name: :account_id, in: :formData, required: true,
                 description: 'Account the receipt was paid from (needs write access to it)',
                 schema: { type: :string, format: :uuid }
-      parameter name: :files, in: :formData, required: true,
-                description: 'Receipt photos or PDF, as files[]',
-                schema: { type: :array, items: { type: :string, format: :binary } }
 
       response '202', 'receipt accepted for processing' do
         schema '$ref' => '#/components/schemas/ReceiptScan'
@@ -55,7 +68,7 @@ RSpec.describe 'API V1 Receipts', type: :request do
         run_test!
       end
 
-      response '403', 'receipt scanning is not available (no AI provider that can read images)' do
+      response '403', 'receipt scanning is not available: preview features off, or no AI provider that can read images' do
         schema '$ref' => '#/components/schemas/ErrorResponse'
         before { allow(ReceiptScan).to receive(:extraction_available?).and_return(false) }
         let(:account_id) { account.id }

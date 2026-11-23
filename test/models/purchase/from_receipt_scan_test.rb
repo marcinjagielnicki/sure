@@ -20,6 +20,14 @@ class Purchase::FromReceiptScanTest < ActiveSupport::TestCase
     assert_equal "b", second.ai_metadata["model"]
   end
 
+  test "a scan whose uploader was removed gets no purchase" do
+    @scan.update!(user: nil)
+
+    assert_no_difference -> { Purchase.count } do
+      assert_nil Purchase::FromReceiptScan.sync!(@scan, extraction_hash: @extraction, ai_metadata: {})
+    end
+  end
+
   test "line discounts reduce the item amount and cash stays cash" do
     @extraction["line_items"] = [ { "name" => "Cheese", "quantity" => "2", "amount" => "30.00", "discount" => "5.00", "category_name" => "Food & Drink" } ]
 

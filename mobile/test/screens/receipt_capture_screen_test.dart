@@ -44,6 +44,7 @@ void main() {
     List<String>? uploadedTo,
     String? initialAccountId,
     Future<List<XFile>?> Function(int maxPages)? scanDocument,
+    Future<List<XFile>> Function()? pickFromGallery,
     bool hideAmounts = false,
   }) async {
     await tester.pumpWidget(ChangeNotifierProvider<PrivacyProvider>(
@@ -62,7 +63,7 @@ void main() {
             initialAccountId: initialAccountId,
             accessTokenLoader: () async => 'token',
             scanDocument: scanDocument ?? (_) async => [photo],
-            pickFromGallery: () async => [photo],
+            pickFromGallery: pickFromGallery ?? () async => [photo],
             service: ReceiptsService(client: MockClient((request) async {
               uploadedTo
                   ?.add(utf8.decode(request.bodyBytes, allowMalformed: true));
@@ -164,6 +165,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining("Couldn't open the scanner"), findsOneWidget);
+    expect(uploadButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('a gallery failure is reported', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await pump(tester, pickFromGallery: () async => throw Exception('no access'));
+
+    await tester.tap(find.text('Choose from gallery'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining("Couldn't open your photos"), findsOneWidget);
     expect(uploadButton(tester).onPressed, isNull);
   });
 

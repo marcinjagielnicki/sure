@@ -40,6 +40,8 @@ class Purchase::Matcher
         .joins(TRANSACTIONS_JOIN)
         .where(account_id: Account.annotatable_by(purchase.user).where(family_id: purchase.family_id).select(:id))
         .where(amount: purchase.total, currency: purchase.currency, parent_entry_id: nil)
+        # A transaction the user excluded isn't a payment; a split parent is excluded by design.
+        .where("entries.excluded = FALSE OR EXISTS (SELECT 1 FROM entries parts WHERE parts.parent_entry_id = entries.id)")
         .where(date: purchase.ordered_on..(purchase.ordered_on + purchase.match_window_days))
         .where(Transaction.not_pending_sql)
         .where("transactions.kind IS NULL OR transactions.kind NOT IN (?)", Transaction::TRANSFER_KINDS)

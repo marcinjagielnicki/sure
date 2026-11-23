@@ -31,7 +31,7 @@ en:
         require_sender_auth: Verify senders
         require_sender_auth_hint: Accept an email only if your mail server confirmed its sender's domain (DMARC or DKIM).
         authserv_id: Trusted mail server
-        authserv_id_hint: The name your mail server writes in Authentication-Results, e.g. mx.google.com. Test the connection to see the names on the latest email.
+        authserv_id_hint: "The name your mail server writes in Authentication-Results, e.g. mx.google.com. Test the connection to see the names on the latest email. Verification is only as good as this server: it must write its own Authentication-Results above any it received and drop received ones that use its name, and set Delivered-To on delivery (Gmail and Microsoft 365 do). Don't rely on it with a server that doesn't."
         save: Save
         test_connection: Test connection
       routes:

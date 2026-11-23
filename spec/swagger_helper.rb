@@ -1066,7 +1066,7 @@ RSpec.configure do |config|
                 items: { '$ref' => '#/components/schemas/Tag' }
               },
               transfer: { '$ref' => '#/components/schemas/Transfer', nullable: true },
-              receipt: { '$ref' => '#/components/schemas/TransactionReceipt', nullable: true },
+              receipt: { '$ref' => '#/components/schemas/TransactionReceipt' },
               purchase_id: { type: :string, format: :uuid, nullable: true,
                              description: 'The purchase (forwarded order email or scanned receipt) this transaction paid for.' },
               attachments: {
@@ -1079,7 +1079,8 @@ RSpec.configure do |config|
           },
           TransactionReceipt: {
             type: :object,
-            description: 'The receipt this transaction was created from or matched to.',
+            nullable: true,
+            description: 'The receipt this transaction was created from or matched to; null when there is none.',
             required: %w[status review_reasons line_items],
             properties: {
               scan_id: { type: :string, format: :uuid, nullable: true },

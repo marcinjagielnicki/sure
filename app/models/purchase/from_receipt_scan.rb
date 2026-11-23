@@ -15,7 +15,11 @@ class Purchase::FromReceiptScan
     @ai_metadata = ai_metadata
   end
 
+  # @return [Purchase, nil] nil when the member who uploaded the scan was removed: a purchase is
+  #   always someone's.
   def sync!
+    return if scan.user.nil?
+
     purchase = Purchase.find_or_initialize_by(receipt_scan_id: scan.id)
     # An order email may already have claimed the transaction; it keeps it and this receipt's
     # purchase stays unlinked for the user to sort out.

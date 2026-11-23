@@ -1,5 +1,5 @@
 <%= render DS::Dialog.new do |dialog| %>
-  <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle", total: @purchase.total ? format_money(Money.new(@purchase.total, @purchase.currency.presence || Current.family.currency)) : "—")) %>
+  <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle", total: purchase_amount(@purchase, @purchase.total))) %>
   <% dialog.with_body do %>
     <div class="space-y-3">
       <% if @candidates.any? %>

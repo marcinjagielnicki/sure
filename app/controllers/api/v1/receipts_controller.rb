@@ -5,6 +5,12 @@ class Api::V1::ReceiptsController < Api::V1::BaseController
   before_action :ensure_write_scope, only: [ :create ]
 
   def create
+    # Receipt scanning is a preview feature, on the API as on the web; scans stay readable
+    # after a user turns preview features off.
+    unless current_resource_owner.preview_features_enabled?
+      return render_json({ error: "preview_required", message: "Receipt scanning is a preview feature. Turn on preview features to use it." }, status: :forbidden)
+    end
+
     unless ReceiptScan.extraction_available?(family: family, user: current_resource_owner)
       return render_json({ error: "ai_unavailable", message: "Receipt scanning is not available on this instance." }, status: :forbidden)
     end

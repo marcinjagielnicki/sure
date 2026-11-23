@@ -31,6 +31,15 @@ class Provider::Registry
       nil
     end
 
+    # The preferred LLM provider when it can do this (e.g. :supports_receipt_extraction?),
+    # else the first other configured one that can.
+    def llm_provider_supporting(capability)
+      preferred = preferred_llm_provider
+      return preferred if preferred&.public_send(capability)
+
+      llm_provider_order.filter_map { |name| get_provider(name) }.find { |provider| provider.public_send(capability) }
+    end
+
     def llm_provider_order
       Setting.llm_provider == "anthropic" ? %i[anthropic openai] : %i[openai anthropic]
     end
