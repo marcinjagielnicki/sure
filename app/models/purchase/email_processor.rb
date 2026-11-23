@@ -43,8 +43,13 @@ class Purchase::EmailProcessor
 
     def family = purchase.family
 
+    # The preferred LLM provider, as other AI features use, when it can read order emails; never
+    # another configured provider, so emails go only where the instance sends its AI work.
     def provider
-      @provider ||= Provider::Registry.llm_provider_supporting(:supports_purchase_extraction?)
+      return @provider if defined?(@provider)
+
+      preferred = Provider::Registry.preferred_llm_provider
+      @provider = preferred if preferred&.supports_purchase_extraction?
     end
 
     def extract(files)

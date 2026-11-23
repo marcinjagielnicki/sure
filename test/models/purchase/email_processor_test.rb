@@ -145,17 +145,15 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
     assert_nil @purchase.reload.linked_transaction
   end
 
-  test "reads with a configured provider that can, even when the preferred one can't" do
-    openai = stub(supports_purchase_extraction?: false)
-    anthropic = stub_purchase_provider
-    Provider::Registry.stubs(:preferred_llm_provider).returns(openai)
-    Provider::Registry.stubs(:llm_provider_order).returns(%i[openai anthropic])
-    Provider::Registry.stubs(:get_provider).with(:openai).returns(openai)
-    Provider::Registry.stubs(:get_provider).with(:anthropic).returns(anthropic)
+  test "doesn't send the email to another provider when the preferred one can't read orders" do
+    other = stub(supports_purchase_extraction?: true)
+    other.expects(:extract_purchase).never
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_purchase_extraction?: false))
+    Provider::Registry.stubs(:get_provider).returns(other)
 
     process
 
-    assert_equal "awaiting_payment", @purchase.reload.status
+    assert @purchase.reload.failed?
   end
 
   test "a run that fails after another run finished the purchase leaves it alone" do
@@ -288,6 +286,16 @@ class Purchase::EmailProcessorTest < ActiveSupport::TestCase
 
     provider.expects(:extract_purchase).never
     process
+  end
+
+  test "reprocess! keeps a purchase failed when the queue rejects the job" do
+    @purchase.update!(status: :failed, error: "boom")
+    Purchase::EmailProcessJob.stubs(:perform_later).returns(false)
+
+    @purchase.reprocess!
+
+    assert @purchase.reload.failed?
+    assert_equal "boom", @purchase.error
   end
 
   test "reprocess! restarts a failed purchase" do

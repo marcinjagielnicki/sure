@@ -30,14 +30,16 @@ class ReceiptScan < ApplicationRecord
 
   class << self
     # Whether receipts can be read for this family and user: the AI route allows it and a
-    # configured provider can read images (only Anthropic so far).
+    # preferred provider can read images (only Anthropic so far).
     def extraction_available?(family:, user:)
       Ai.available?(:extract_receipt, family:, user:) && extraction_provider.present?
     end
 
-    # The preferred LLM provider if it reads receipts, else another configured one that does.
+    # The preferred LLM provider, as other AI features use, when it can read receipts. Never
+    # another configured provider: receipts go only where the instance sends its AI work.
     def extraction_provider
-      Provider::Registry.llm_provider_supporting(:supports_receipt_extraction?)
+      provider = Provider::Registry.preferred_llm_provider
+      provider if provider&.supports_receipt_extraction?
     end
 
     # Stores the normalized files and gives the user a "Processing receipt…" transaction on the
@@ -53,6 +55,9 @@ class ReceiptScan < ApplicationRecord
           # locked first, in the order User#transfer_to_family! takes them.
           user.lock!
           account.lock!
+          # Access is checked again under the locks: a member removed from the account since the
+          # caller checked can't add to it.
+          raise InvalidUpload, I18n.t("receipt_scans.errors.account_not_writable") unless Account.writable_by(user).exists?(account.id)
           scan = create!(family:, user:, account:)
           normalized.each { |file| scan.files.attach(**file) }
 

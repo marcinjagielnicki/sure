@@ -7,17 +7,22 @@ class ReceiptScanTest < ActiveSupport::TestCase
     @account = accounts(:depository)
   end
 
-  test "reads receipts with a configured provider that can, even when the preferred one can't" do
-    openai = stub(supports_receipt_extraction?: false)
+  test "reads receipts with the preferred provider when it can" do
     anthropic = stub(supports_receipt_extraction?: true)
-    Provider::Registry.stubs(:preferred_llm_provider).returns(openai)
-    Provider::Registry.stubs(:llm_provider_order).returns(%i[openai anthropic])
-    Provider::Registry.stubs(:get_provider).with(:openai).returns(openai)
-    Provider::Registry.stubs(:get_provider).with(:anthropic).returns(anthropic)
+    Provider::Registry.stubs(:preferred_llm_provider).returns(anthropic)
     Ai.stubs(:available?).returns(true)
 
     assert_same anthropic, ReceiptScan.extraction_provider
-    assert ReceiptScan.extraction_available?(family: families(:dylan_family), user: users(:family_admin))
+    assert ReceiptScan.extraction_available?(family: @family, user: @user)
+  end
+
+  test "doesn't send receipts to another provider when the preferred one can't read them" do
+    Provider::Registry.stubs(:preferred_llm_provider).returns(stub(supports_receipt_extraction?: false))
+    Provider::Registry.stubs(:get_provider).returns(stub(supports_receipt_extraction?: true))
+    Ai.stubs(:available?).returns(true)
+
+    assert_nil ReceiptScan.extraction_provider
+    assert_not ReceiptScan.extraction_available?(family: @family, user: @user)
   end
 
   test "account must belong to the family" do
