@@ -83,9 +83,17 @@ class ReceiptScan::Processor
       nil
     end
 
+    # Only a scan still processing fails: another run may have finished it meanwhile.
     def record_failure(error)
-      scan.reload.update!(status: :failed, error: error&.message)
-      write_receipt_extra(placeholder) if placeholder && Transaction.exists?(placeholder.id)
+      failed = scan.with_lock do
+        next false unless scan.processing?
+
+        scan.update!(status: :failed, error: error&.message)
+        write_receipt_extra(placeholder) if placeholder && Transaction.exists?(placeholder.id)
+        true
+      end
+      return unless failed
+
       DebugLogEntry.capture(
         category: "ai",
         level: "error",

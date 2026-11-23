@@ -123,6 +123,22 @@ class ReceiptScan::ProcessorTest < ActiveSupport::TestCase
     assert_includes scan.review_reasons.map { _1["reason"] }, "duplicate_receipt"
   end
 
+  test "a run that fails after another run finished the scan leaves the finished scan alone" do
+    scan = upload("rotated.jpg", "image/jpeg")
+    provider = stub(supports_receipt_extraction?: true)
+    provider.stubs(:extract_receipt).with do |**|
+      # Another run completes the scan while this one waits for the model.
+      ReceiptScan.find(scan.id).update!(status: :completed)
+      true
+    end.returns(Provider::Response.new(success?: false, data: nil, error: StandardError.new("timeout")))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    process(scan)
+
+    assert scan.reload.completed?
+    assert_nil scan.error
+  end
+
   test "merges into a pending bank transaction and defers the split" do
     pending = Entry.create!(account: @account, name: "CARD CORNER GROCER", date: @date, currency: "USD",
                             amount: BigDecimal("50.00"), entryable: Transaction.new(extra: { "plaid" => { "pending" => true } }))
