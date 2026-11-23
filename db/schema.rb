@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -2096,6 +2096,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
     t.index ["status"], name: "index_questrade_items_on_status"
   end
 
+  create_table "receipt_scans", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.uuid "account_id", null: false
+    t.uuid "user_id"
+    t.uuid "transaction_id"
+    t.string "status", default: "processing", null: false
+    t.jsonb "extraction", default: {}, null: false
+    t.jsonb "review_reasons", default: [], null: false
+    t.text "error"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_receipt_scans_on_account_id"
+    t.index ["family_id", "created_at"], name: "index_receipt_scans_on_family_id_and_created_at"
+    t.index ["family_id"], name: "index_receipt_scans_on_family_id"
+    t.index ["transaction_id"], name: "index_receipt_scans_on_transaction_id"
+    t.index ["user_id"], name: "index_receipt_scans_on_user_id"
+  end
+
   create_table "recurrence_rules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "day_of_month"
@@ -3301,6 +3319,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
   add_foreign_key "push_subscriptions", "users"
   add_foreign_key "questrade_accounts", "questrade_items"
   add_foreign_key "questrade_items", "families"
+  add_foreign_key "receipt_scans", "accounts"
+  add_foreign_key "receipt_scans", "families"
+  add_foreign_key "receipt_scans", "transactions", on_delete: :nullify
+  add_foreign_key "receipt_scans", "users", on_delete: :nullify
   add_foreign_key "recurrence_rules", "recurring_transactions", on_delete: :cascade
   add_foreign_key "recurring_allocations", "entries", on_delete: :nullify
   add_foreign_key "recurring_allocations", "recurring_occurrences", column: ["recurring_occurrence_id", "currency"], primary_key: ["id", "currency"], name: "fk_recurring_allocations_currency_matches_occurrence", on_delete: :cascade
