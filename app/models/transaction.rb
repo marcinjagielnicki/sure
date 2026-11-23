@@ -879,7 +879,15 @@ class Transaction < ApplicationRecord
     # as history (the "AI history" filter). A change the source makes itself
     # rewrites its record's metadata right after the save
     # (Enrichable#log_enrichment), so only someone else's change ends a claim.
+    #
+    # Other sources (rules, receipts, purchases) lose their claim once the
+    # category moves away from the value they recorded, so a category the user
+    # later sets back to that value is the user's (see #category_set_by_user?).
     def supersede_automatic_category_claims
       self.class.supersede_automatic_category_claims!([ id ])
+      DataEnrichment.where(enrichable: self, attribute_name: "category_id")
+                    .where.not(source: AUTO_CATEGORY_SOURCES)
+                    .where.not(value: category_id&.to_s)
+                    .update_all(Arel.sql(%(metadata = COALESCE(metadata, '{}'::jsonb) || '{"superseded": true}'::jsonb)))
     end
 end
