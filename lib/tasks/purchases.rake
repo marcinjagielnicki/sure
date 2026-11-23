@@ -5,13 +5,17 @@ namespace :purchases do
 
     ReceiptScan.where(status: %w[completed needs_review]).where.missing(:purchase).find_each do |scan|
       receipt = scan.linked_transaction&.extra&.dig("receipt")
-      if receipt.blank?
+      # Only a receipt that was read: a scan the AI never got to carries just a status.
+      if receipt.blank? || receipt.values_at("total", "merchant", "line_items").all?(&:blank?)
         skipped += 1
         next
       end
 
-      Purchase::FromReceiptScan.sync!(scan, extraction_hash: receipt, ai_metadata: { "backfilled" => true, "raw_output" => receipt })
-      created += 1
+      if Purchase::FromReceiptScan.sync!(scan, extraction_hash: receipt, ai_metadata: { "backfilled" => true, "raw_output" => receipt })
+        created += 1
+      else
+        skipped += 1
+      end
     end
 
     puts "created=#{created} skipped=#{skipped}"

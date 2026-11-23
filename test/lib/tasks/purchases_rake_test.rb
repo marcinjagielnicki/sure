@@ -27,6 +27,17 @@ class PurchasesRakeTest < ActiveSupport::TestCase
     assert_nil @orphan.reload.purchase
   end
 
+  test "a scan that was never read is skipped" do
+    entry = create_transaction(account: @scan.account, amount: 0, date: Date.current, name: "Processing receipt…")
+    entry.entryable.update!(extra: { "receipt" => { "status" => "needs_review", "review_reasons" => [ { "reason" => "ai_unavailable" } ] } })
+    @orphan.update!(linked_transaction: entry.entryable)
+
+    out, = capture_io { Rake::Task["purchases:backfill_receipts"].invoke }
+
+    assert_match "created=1 skipped=1", out
+    assert_nil @orphan.reload.purchase
+  end
+
   test "running twice creates nothing new" do
     capture_io { Rake::Task["purchases:backfill_receipts"].invoke }
     RakeTaskTestHelper.prepare("purchases:backfill_receipts")
